@@ -1,0 +1,124 @@
+GUIDA INSTALLAZIONE MARRISON ASSISTANT
+=====================================
+
+1. PREPARAZIONE AMBIENTE
+-----------------------
+- WordPress 5.0+ installato
+- PHP 7.4+ attivo
+- Accesso FTP/SFTP al server
+- Permessi scrittura cartella plugins
+
+2. OTTENIMENTO CREDENZIALI
+-------------------------
+
+GOOGLE GEMINI:
+- Vai su: https://aistudio.google.com/app/apikey
+- Crea nuovo progetto o usa esistente
+- Genera nuova API Key
+- Copia la API Key
+
+TWILIO WHATSAPP:
+- Vai su: https://www.twilio.com/
+- Crea account gratuito o premium
+- Configura WhatsApp Sandbox
+- Ottieni: Account SID, Auth Token, Numero WhatsApp
+- Copia tutte le credenziali
+
+3. INSTALLAZIONE PLUGIN
+----------------------
+1. Scarica/Clona repository marrison-assistant
+2. Carica cartella completa in: wp-content/plugins/
+3. Da admin WordPress > Plugin > Attiva "Marrison Assistant"
+
+4. CONFIGURAZIONE BASE
+---------------------
+1. Vai in: Impostazioni > Marrison Assistant
+2. Inserisci Google Gemini API Key
+3. Inserisci credenziali Twilio:
+   - Account SID
+   - Auth Token  
+   - Numero WhatsApp (formato: whatsapp:+14155238886)
+4. Personalizza prompt AI se desiderato
+5. Salva impostazioni
+
+5. TEST CONNESSIONI
+------------------
+1. Clicca "Testa Connessione Gemini"
+2. Dovresti vedere: ✓ Connessione riuscita
+3. Clicca "Testa Connessione Twilio"
+4. Dovresti vedere: ✓ Connessione riuscita
+
+6. CONFIGURAZIONE WEBHOOK TWILIO
+--------------------------------
+1. Copia questo URL dalla pagina admin:
+   https://TUOSITO.com/wp-json/wa-ai/v1/incoming
+2. Vai su console Twilio > WhatsApp Sandbox
+3. In "When a message comes in" incolla l'URL
+4. Salva le impostazioni Twilio
+
+7. SCANSIONE CONTENUTI
+---------------------
+1. Nella pagina admin, clicca "Scansiona Contenuti Sito"
+2. Attendi completamento scansione
+3. Il sistema analizzerà:
+   - Pagine WordPress
+   - Articoli blog
+   - Prodotti WooCommerce (se presente)
+
+8. TEST FUNZIONAMENTO
+---------------------
+1. Invia messaggio WhatsApp al numero Twilio
+2. Attendi risposta automatica
+3. Controlla log se problemi:
+   wp-content/debug.log
+
+9. PERSONALIZZAZIONE AVANZATA
+----------------------------
+- Modifica prompt per comportamento AI
+- Aggiungi contenuti specifici nella knowledge base
+- Configura risposte personalizzate
+
+10. TROUBLESHOOTING
+------------------
+PROBLEMA: Webhook non riceve messaggi
+SOLUZIONE: Verifica URL webhook in Twilio, controlla SSL
+
+PROBLEMA: Errore connessione Gemini
+SOLUZIONE: Verifica API Key, controlla quota API
+
+PROBLEMA: Errore connessione Twilio
+SOLUZIONE: Verifica SID e Auth Token, controlla saldo
+
+PROBLEMA: Risposte AI non pertinenti
+SOLUZIONE: Esegui nuova scansione contenuti, migliora prompt
+
+11. COSTI API
+-------------
+- Google Gemini: Utilizzo gratuito poi $/1K tokens
+- Twilio WhatsApp: $0.05 per messaggio inviato
+- Verifica costi aggiornati sui siti ufficiali
+
+12. SICUREZZA
+------------
+- Non condividere API Keys
+- Usa HTTPS obbligatorio
+- Limita accessi alla pagina admin
+- Monitora utilizzi API
+
+13. BACKUP
+---------
+- Fai backup prima installazione
+- Esporta impostazioni plugin periodicamente
+- Documenta configurazioni personalizzate
+
+14. AGGIORNAMENTI
+---------------
+- Controlla aggiornamenti plugin
+- Testa su ambiente di sviluppo
+- Fai backup prima aggiornamenti
+
+15. SUPPORTO
+-----------
+- Controlla log WordPress per errori
+- Verifica configurazione server
+- Assicurati requisiti minimi soddisfatti
