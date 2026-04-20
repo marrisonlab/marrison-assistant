@@ -41,7 +41,7 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--marrison-icon-color, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
     border: none;
     outline: none;
 }
@@ -133,7 +133,7 @@
 /* Header - Modern Design */
 .marrison-chat-header {
     padding: 20px 24px 16px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--marrison-header-color, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
     color: white;
     display: flex;
     align-items: center;
@@ -284,6 +284,17 @@
     text-align: right;
 }
 
+/* Links in messages */
+.marrison-message-content a {
+    color: #667eea;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.marrison-message-content a:hover {
+    color: #5a67d8;
+}
+
 /* Typing Indicator - Modern Design */
 .marrison-typing {
     display: flex;
@@ -353,7 +364,7 @@
 }
 
 .marrison-chat-textarea:focus {
-    border-color: #667eea;
+    border-color: var(--marrison-button-color, #667eea);
     box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
 }
 
@@ -367,7 +378,7 @@
     height: 44px;
     border-radius: 8px;
     border: none;
-    background: #667eea;
+    background: var(--marrison-button-color, #667eea);
     color: white;
     cursor: pointer;
     display: flex;
@@ -379,7 +390,7 @@
 }
 
 .marrison-send-button:hover {
-    background: #5a67d8;
+    background: var(--marrison-button-color-hover, #5a67d8);
 }
 
 .marrison-send-button:disabled {
@@ -467,4 +478,43 @@
         color: #e2e8f0;
         border-color: #475569;
     }
+
+    .marrison-intent-btn {
+        background: #1e293b;
+        color: var(--marrison-button-color, #667eea);
+        border-color: var(--marrison-button-color, #667eea);
+    }
+}
+
+/* Bottoni routing categoria (quick-reply) */
+.marrison-intent-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 2px 0 10px 0;
+}
+
+.marrison-intent-btn {
+    background: #ffffff;
+    border: 1.5px solid var(--marrison-button-color, #667eea);
+    color: var(--marrison-button-color, #667eea);
+    border-radius: 14px;
+    padding: 5px 11px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    line-height: 1.3;
+    white-space: nowrap;
+    outline: none;
+    user-select: none;
+}
+
+.marrison-intent-btn:hover {
+    background: var(--marrison-button-color, #667eea);
+    color: #ffffff;
+}
+
+.marrison-intent-btn:active {
+    opacity: 0.85;
 }

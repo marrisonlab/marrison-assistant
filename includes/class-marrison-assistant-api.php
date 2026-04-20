@@ -10,60 +10,11 @@ if (!defined('ABSPATH')) {
 class Marrison_Assistant_API {
     
     public function __construct() {
-        add_action('rest_api_init', array($this, 'register_routes'));
         add_action('wp_ajax_marrison_test_gemini', array($this, 'ajax_test_gemini'));
-        add_action('wp_ajax_marrison_test_twilio', array($this, 'ajax_test_twilio'));
         add_action('wp_ajax_marrison_scan_content', array($this, 'ajax_scan_content'));
         add_action('wp_ajax_marrison_debug_gemini', array($this, 'ajax_debug_gemini'));
         add_action('wp_ajax_marrison_scan_site_content', array($this, 'ajax_scan_site_content'));
-    }
-    
-    /**
-     * Registra le route API REST
-     */
-    public function register_routes() {
-        register_rest_route('wa-ai/v1', '/incoming', array(
-            'methods' => 'POST',
-            'callback' => array($this, 'handle_incoming_webhook'),
-            'permission_callback' => array($this, 'webhook_permission_check')
-        ));
-    }
-    
-    /**
-     * Gestisce il webhook in arrivo da Twilio
-     */
-    public function handle_incoming_webhook($request) {
-        error_log('Marrison Assistant: Webhook ricevuto da Twilio');
-        
-        $twilio = new Marrison_Assistant_Twilio();
-        $result = $twilio->process_incoming_message($request);
-        
-        if (is_wp_error($result)) {
-            error_log('Marrison Assistant: Errore elaborazione webhook - ' . $result->get_error_message());
-            return new WP_REST_Response(array('error' => $result->get_error_message()), $result->get_error_data()['status']);
-        }
-        
-        // Rispondi con TwiML per conferma
-        $twiml = '<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Message>Messaggio ricevuto e processato</Message>
-</Response>';
-        
-        return new WP_REST_Response($twiml, 200, array('Content-Type' => 'text/xml'));
-    }
-    
-    /**
-     * Verifica i permessi per il webhook
-     */
-    public function webhook_permission_check($request) {
-        // Per MVP, verifica base che il webhook sia abilitato
-        $enable_webhook = get_option('marrison_assistant_enable_webhook', false);
-        
-        if (!$enable_webhook) {
-            return new WP_Error('webhook_disabled', 'Webhook non abilitato', array('status' => 403));
-        }
-        
-        return true;
+        add_action('wp_ajax_marrison_reset_token_log', array($this, 'ajax_reset_token_log'));
     }
     
     /**
@@ -236,38 +187,73 @@ class Marrison_Assistant_API {
             
             $scanner = new Marrison_Assistant_Content_Scanner();
             
+            // Prepara directory e mostra path diagnostico
+            $data_dir = $scanner->get_data_directory();
+            $dir_ok = is_writable($data_dir);
+            echo "<p style='color:#888; font-size:11px;'>Directory dati: " . esc_html($data_dir) . " — " . ($dir_ok ? "<span style='color:green'>scrivibile</span>" : "<span style='color:red'>NON scrivibile</span>") . "</p>";
+
             // Esegui scansione pagine
             echo "<p>Scansione pagine...</p>";
             $pages = $scanner->scan_pages();
             echo "<p>Trovate " . count($pages) . " pagine</p>";
-            
+            if (!empty($pages)) {
+                $r = $scanner->save_content_file_public('pages', $pages);
+                echo "<p style='color:#888; font-size:11px;'>pages.json: " . ($r !== false ? esc_html($r) . " bytes" : "<span style='color:red'>ERRORE scrittura</span>") . "</p>";
+            }
+
             // Esegui scansione articoli
             echo "<p>Scansione articoli...</p>";
             $posts = $scanner->scan_posts();
             echo "<p>Trovati " . count($posts) . " articoli</p>";
-            
+            if (!empty($posts)) {
+                $r = $scanner->save_content_file_public('posts', $posts);
+                echo "<p style='color:#888; font-size:11px;'>posts.json: " . ($r !== false ? esc_html($r) . " bytes" : "<span style='color:red'>ERRORE scrittura</span>") . "</p>";
+            }
+
             // Esegui scansione prodotti (se WooCommerce è attivo)
             echo "<p>Scansione prodotti...</p>";
             $products = array();
             if (class_exists('WooCommerce')) {
                 $products = $scanner->scan_products();
                 echo "<p>Trovati " . count($products) . " prodotti</p>";
+                if (!empty($products)) {
+                    $r = $scanner->save_content_file_public('products', $products);
+                    echo "<p style='color:#888; font-size:11px;'>products.json: " . ($r !== false ? esc_html($r) . " bytes" : "<span style='color:red'>ERRORE scrittura</span>") . "</p>";
+                }
+
+                // Scansione ordini
+                echo "<p>Scansione ordini...</p>";
+                $orders = $scanner->scan_orders();
+                echo "<p>Trovati " . count($orders) . " ordini</p>";
+                if (!empty($orders)) {
+                    $r = $scanner->save_content_file_public('orders', $orders);
+                    echo "<p style='color:#888; font-size:11px;'>orders.json: " . ($r !== false ? esc_html($r) . " bytes" : "<span style='color:red'>ERRORE scrittura</span>") . "</p>";
+                }
             } else {
-                echo "<p>WooCommerce non installato - saltato prodotti</p>";
+                echo "<p>WooCommerce non installato - saltato prodotti e ordini</p>";
             }
-            
-            // Salva contenuti
+
+            // Scansione eventi
+            echo "<p>Scansione eventi...</p>";
+            $events = $scanner->scan_events();
+            echo "<p>Trovati " . count($events) . " eventi</p>";
+            if (!empty($events)) {
+                $r = $scanner->save_content_file_public('events', $events);
+                echo "<p style='color:#888; font-size:11px;'>events.json: " . ($r !== false ? esc_html($r) . " bytes" : "<span style='color:red'>ERRORE scrittura</span>") . "</p>";
+            }
+
+            // Salva anche in wp_options come fallback legacy
             $content = array(
-                'pages' => $pages,
-                'posts' => $posts,
-                'products' => $products,
-                'scanned_at' => current_time('mysql'),
+                'pages'       => $pages,
+                'posts'       => $posts,
+                'products'    => $products,
+                'scanned_at'  => current_time('mysql'),
                 'total_items' => count($pages) + count($posts) + count($products)
             );
-            
+
             update_option('marrison_assistant_site_content', $content);
             update_option('marrison_assistant_last_content_scan', time());
-            
+
             echo "<h4 style='color: green;'>Scansione Completata!</h4>";
             echo "<p><strong>Totale:</strong> " . $content['total_items'] . " elementi scansionati</p>";
             echo "<p><strong>Data:</strong> " . $content['scanned_at'] . "</p>";
@@ -305,47 +291,97 @@ class Marrison_Assistant_API {
     }
     
     /**
-     * AJAX: Test connessione Twilio
-     */
-    public function ajax_test_twilio() {
-        check_ajax_referer('marrison_test_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_die('Non hai i permessi necessari');
-        }
-        
-        $twilio = new Marrison_Assistant_Twilio();
-        $result = $twilio->test_connection();
-        
-        if ($result === true) {
-            wp_send_json_success('Connessione Twilio riuscita');
-        } else {
-            wp_send_json_error($result);
-        }
-    }
-    
-    /**
      * AJAX: Scansione contenuti
      */
     public function ajax_scan_content() {
         check_ajax_referer('marrison_scan_nonce', 'nonce');
-        
+
         if (!current_user_can('manage_options')) {
             wp_die('Non hai i permessi necessari');
         }
-        
+
+        // === DIAGNOSTICA DIRECTORY ===
+        $upload_dir   = wp_upload_dir();
+        $upload_base  = $upload_dir['basedir'];
+        $target_dir   = $upload_base . '/marrison-assistant';
+        $plugin_dir   = MARRISON_ASSISTANT_PLUGIN_DIR . 'data';
+
+        $debug = array();
+        $debug[] = 'uploads basedir: ' . $upload_base;
+        $debug[] = 'uploads scrivibile: ' . (is_writable($upload_base) ? 'SI' : 'NO');
+        $debug[] = 'target dir: ' . $target_dir;
+        $debug[] = 'target dir esiste: ' . (file_exists($target_dir) ? 'SI' : 'NO');
+        if (isset($upload_dir['error']) && $upload_dir['error']) {
+            $debug[] = 'ERRORE upload_dir: ' . $upload_dir['error'];
+        }
+
+        // Tentativo creazione manuale della directory
+        if (!file_exists($target_dir)) {
+            $mkdir_result = wp_mkdir_p($target_dir);
+            $debug[] = 'mkdir result: ' . ($mkdir_result ? 'RIUSCITO' : 'FALLITO');
+        } else {
+            $debug[] = 'target dir scrivibile: ' . (is_writable($target_dir) ? 'SI' : 'NO');
+        }
+
+        // Test scrittura diretta
+        $test_file = $target_dir . '/test.txt';
+        $write_test = @file_put_contents($test_file, 'test');
+        $debug[] = 'test scrittura: ' . ($write_test !== false ? 'OK (' . $write_test . ' bytes)' : 'FALLITO');
+        if ($write_test !== false) {
+            @unlink($test_file);
+        }
+
+        // Prova fallback nella directory plugin
+        if (!file_exists($plugin_dir)) {
+            $plugin_mkdir = wp_mkdir_p($plugin_dir);
+            $debug[] = 'plugin data dir mkdir: ' . ($plugin_mkdir ? 'RIUSCITO' : 'FALLITO');
+        }
+        $plugin_test_file = $plugin_dir . '/test.txt';
+        $plugin_write_test = @file_put_contents($plugin_test_file, 'test');
+        $debug[] = 'plugin dir scrittura: ' . ($plugin_write_test !== false ? 'OK' : 'FALLITO');
+        if ($plugin_write_test !== false) {
+            @unlink($plugin_test_file);
+        }
+        // ===========================
+
         $scanner = new Marrison_Assistant_Content_Scanner();
         $content = $scanner->scan_all_content();
-        
+
         $stats = $scanner->get_content_stats();
-        
+
+        // Verifica se i file sono stati creati
+        foreach (array('pages', 'posts', 'products', 'orders', 'events') as $type) {
+            $primary  = $target_dir . '/' . $type . '.json';
+            $fallback = $plugin_dir . '/' . $type . '.json';
+            if (file_exists($primary)) {
+                $debug[] = $type . '.json: creato in uploads (' . filesize($primary) . ' bytes)';
+            } elseif (file_exists($fallback)) {
+                $debug[] = $type . '.json: creato in plugin/data (' . filesize($fallback) . ' bytes)';
+            } else {
+                $debug[] = $type . '.json: NON CREATO (forse contenuto vuoto?)';
+            }
+        }
+
         $message = sprintf(
-            'Scansione completata: %d pagine, %d articoli, %d prodotti',
+            'Scansione completata: %d pagine, %d articoli, %d prodotti — DEBUG: %s',
             $stats['total_pages'],
             $stats['total_posts'],
-            $stats['total_products']
+            $stats['total_products'],
+            implode(' | ', $debug)
         );
-        
+
         wp_send_json_success($message);
+    }
+
+    /**
+     * AJAX: Azzera il log dei token
+     */
+    public function ajax_reset_token_log() {
+        check_ajax_referer('marrison_admin_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permesso negato');
+        }
+        update_option('marrison_assistant_token_log', array());
+        wp_send_json_success('Log token azzerato.');
     }
 }

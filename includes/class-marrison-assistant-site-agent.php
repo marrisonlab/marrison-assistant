@@ -42,13 +42,23 @@ class Marrison_Assistant_Site_Agent {
             true
         );
         
+        $assistant_name = get_option('marrison_assistant_site_agent_name', 'Marry');
+        $welcome_msg = get_option('marrison_assistant_site_agent_welcome', 'Ciao, sono {name}, il tuo assistente virtuale, come posso aiutarti?');
+        $welcome_msg = str_replace('{name}', $assistant_name, $welcome_msg);
+
         wp_localize_script('marrison-site-agent', 'marrisonAgent', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('marrison_agent_nonce'),
-            'welcome' => get_option('marrison_assistant_site_agent_welcome', 'Ciao! Come posso aiutarti oggi?'),
+            'welcome' => $welcome_msg,
             'placeholder' => get_option('marrison_assistant_site_agent_placeholder', 'Scrivi un messaggio...'),
             'title' => get_option('marrison_assistant_site_agent_title', 'Assistente AI'),
-            'isTyping' => 'Sto scrivendo...'
+            'name' => $assistant_name,
+            'isTyping' => 'Sto scrivendo...',
+            'colors' => array(
+                'icon' => get_option('marrison_assistant_site_agent_icon_color', '#667eea'),
+                'header' => get_option('marrison_assistant_site_agent_header_color', '#667eea'),
+                'button' => get_option('marrison_assistant_site_agent_button_color', '#667eea'),
+            )
         ));
     }
     
@@ -78,21 +88,30 @@ class Marrison_Assistant_Site_Agent {
         $position = get_option('marrison_assistant_site_agent_position', 'bottom-right');
         $color = get_option('marrison_assistant_site_agent_color', '#0073aa');
         $title = get_option('marrison_assistant_site_agent_title', 'Assistente AI');
-        $welcome = get_option('marrison_assistant_site_agent_welcome', 'Ciao! Come posso aiutarti oggi?');
+        $assistant_name = get_option('marrison_assistant_site_agent_name', 'Marry');
+        $welcome = get_option('marrison_assistant_site_agent_welcome', 'Ciao, sono {name}, il tuo assistente virtuale, come posso aiutarti?');
         $placeholder = get_option('marrison_assistant_site_agent_placeholder', 'Scrivi un messaggio...');
-        
+
+        // Sostituisci {name} con il nome dell'assistente
+        $welcome = str_replace('{name}', $assistant_name, $welcome);
+
+        // Colori personalizzabili
+        $icon_color = get_option('marrison_assistant_site_agent_icon_color', '#667eea');
+        $header_color = get_option('marrison_assistant_site_agent_header_color', '#667eea');
+        $button_color = get_option('marrison_assistant_site_agent_button_color', '#667eea');
+
         // Messaggio personalizzato per utenti non loggati (se il check è disabilitato ma l'utente non è loggato)
         if (!is_user_logged_in()) {
             $welcome = 'Ciao! Per accedere all\'assistente completo, effettua il login. Posso comunque aiutarti con informazioni generali.';
         }
-        
+
         // Assicurati che il messaggio di benvenuto non sia mai vuoto
         if (empty($welcome)) {
             $welcome = 'Ciao! Come posso aiutarti oggi?';
         }
         
         ?>
-        <div id="marrison-chat-widget" class="marrison-chat-widget marrison-<?php echo esc_attr($position); ?>">
+        <div id="marrison-chat-widget" class="marrison-chat-widget marrison-<?php echo esc_attr($position); ?>" style="--marrison-icon-color: <?php echo esc_attr($icon_color); ?>; --marrison-header-color: <?php echo esc_attr($header_color); ?>; --marrison-button-color: <?php echo esc_attr($button_color); ?>; --marrison-button-color-hover: <?php echo esc_attr($button_color); ?>;">
             <!-- Chat Button -->
             <div class="marrison-chat-button">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
@@ -129,6 +148,21 @@ class Marrison_Assistant_Site_Agent {
                         <div class="marrison-message-time" style="font-size: 11px; color: #64748b; margin-top: 4px; padding: 0 4px;">Ora</div>
                     </div>
                     
+                    <!-- Bottoni di routing categoria (condizionali) -->
+                    <?php
+                    $scanner      = new Marrison_Assistant_Content_Scanner();
+                    $show_products = $scanner->has_content('products') || class_exists('WooCommerce');
+                    $show_events   = $scanner->has_content('events');
+                    $show_orders   = is_user_logged_in();
+                    // Info: sempre visibile (pagine/post sempre presenti)
+                    ?>
+                    <div id="marrison-intent-buttons" class="marrison-intent-buttons">
+                        <?php if ($show_products): ?><button type="button" class="marrison-intent-btn" data-intent="products">🛍️ Prodotti</button><?php endif; ?>
+                        <?php if ($show_orders):   ?><button type="button" class="marrison-intent-btn" data-intent="orders">📦 Ordini</button><?php endif; ?>
+                        <button type="button" class="marrison-intent-btn" data-intent="info">ℹ️ Info</button>
+                        <?php if ($show_events):   ?><button type="button" class="marrison-intent-btn" data-intent="events">📅 Eventi</button><?php endif; ?>
+                    </div>
+
                     <?php if (!is_user_logged_in() && !$logged_only): ?>
                     <div class="marrison-message marrison-bot">
                         <div class="marrison-message-content marrison-tip-message">
@@ -146,7 +180,7 @@ class Marrison_Assistant_Site_Agent {
                         placeholder="<?php echo esc_attr($placeholder); ?>"
                         rows="2"
                         style="flex: 1; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 14px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.5; color: #333; background: #f8fafc; resize: none; outline: none; min-height: 42px; box-sizing: border-box; width: 100%;"></textarea>
-                    <button id="marrison-chat-send" class="marrison-send-button" style="width: 42px; height: 42px; border-radius: 50%; border: none; background: linear-gradient(135deg, #667eea, #764ba2); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0;">
+                    <button id="marrison-chat-send" class="marrison-send-button" style="width: 42px; height: 42px; border-radius: 50%; border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
                             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                         </svg>
@@ -163,45 +197,107 @@ class Marrison_Assistant_Site_Agent {
      */
     public function handle_chat_request() {
         check_ajax_referer('marrison_agent_nonce', 'nonce');
-        
+
+        // Rate limiting
+        $rl = $this->check_rate_limit();
+        if ($rl !== true) {
+            wp_send_json_error(array(
+                'code'    => 'rate_limited',
+                'message' => $rl['message'],
+                'wait'    => $rl['wait'],
+            ));
+        }
+
         $message = sanitize_textarea_field($_POST['message']);
-        
+        $intent  = isset($_POST['intent']) ? sanitize_text_field($_POST['intent']) : 'general';
+        $history_raw = isset($_POST['history']) ? stripslashes($_POST['history']) : '[]';
+        $history = json_decode($history_raw, true);
+        if (!is_array($history)) $history = array();
+
         if (empty($message)) {
             wp_send_json_error('Messaggio vuoto');
         }
-        
+
         // Verifica se l'utente è loggato e se è richiesto
         $logged_only = get_option('marrison_assistant_site_agent_logged_only', false);
         if ($logged_only && !is_user_logged_in()) {
             wp_send_json_error('Accesso negato. Effettua il login per utilizzare l\'assistente.');
         }
-        
-        // Processa il messaggio con Gemini
+
+        // Limita intento per utenti guest (no ordini)
+        if (!is_user_logged_in() && $intent === 'orders') {
+            $intent = 'general';
+        }
+
+        // Processa il messaggio con Gemini passando l'intento
         $gemini = new Marrison_Assistant_Gemini();
-        
-        // Se l'utente non è loggato, limita le funzionalità
+
         if (!is_user_logged_in()) {
-            // Aggiungi context per utenti guest
             $guest_prompt = "Rispondi come assistente per visitatori del sito. Non fornire informazioni su ordini specifici o dati personali. Invita l'utente a registrarsi per servizi completi. ";
-            $response = $gemini->process_message($guest_prompt . $message);
+            $response = $gemini->process_message($guest_prompt . $message, $intent, $history, $message);
         } else {
-            // Utente loggato - accesso completo
             $current_user = wp_get_current_user();
             $user_context = "Utente loggato: {$current_user->display_name} (ID: {$current_user->ID}). ";
-            $response = $gemini->process_message($user_context . $message);
+            $response = $gemini->process_message($user_context . $message, $intent, $history, $message);
         }
-        
+
         if ($response) {
             wp_send_json_success(array(
                 'message' => $response,
                 'time' => current_time('H:i'),
-                'user_logged_in' => is_user_logged_in()
+                'user_logged_in' => is_user_logged_in(),
+                'intent' => $intent
             ));
         } else {
             wp_send_json_error('Errore elaborazione messaggio');
         }
     }
     
+    /**
+     * Rate limiting per IP: max 10 req/minuto e 80 req/ora.
+     * Usa WordPress transients (compatibile con object cache).
+     * @return true|array  true se OK, array con 'wait' e 'message' se bloccato
+     */
+    private function check_rate_limit() {
+        // Estrai IP in modo sicuro, anche dietro proxy/CDN
+        $ip = '';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $parts = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+            $ip    = trim($parts[0]);
+        }
+        if (empty($ip) || !filter_var($ip, FILTER_VALIDATE_IP)) {
+            $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0';
+        }
+        $h = substr(md5($ip), 0, 16); // hash parziale — non loggare IP in chiaro
+
+        // ── Finestra 1: max 10 richieste al minuto ──
+        $key_min   = 'marrison_rl_m_' . $h;
+        $count_min = (int) get_transient($key_min);
+        if ($count_min >= 10) {
+            return array('wait' => '60', 'message' => 'Stai inviando troppi messaggi. Attendi un momento prima di riprovare.');
+        }
+        // Incrementa; se il transient non esiste ancora, impostalo con TTL 60s
+        if ($count_min === 0) {
+            set_transient($key_min, 1, 60);
+        } else {
+            set_transient($key_min, $count_min + 1, 60);
+        }
+
+        // ── Finestra 2: max 80 richieste all'ora ──
+        $key_hour   = 'marrison_rl_h_' . $h;
+        $count_hour = (int) get_transient($key_hour);
+        if ($count_hour >= 80) {
+            return array('wait' => '3600', 'message' => 'Limite orario raggiunto. Riprova tra qualche minuto.');
+        }
+        if ($count_hour === 0) {
+            set_transient($key_hour, 1, 3600);
+        } else {
+            set_transient($key_hour, $count_hour + 1, 3600);
+        }
+
+        return true;
+    }
+
     /**
      * Ottiene le statistiche di utilizzo
      */

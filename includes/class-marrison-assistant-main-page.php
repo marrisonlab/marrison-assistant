@@ -22,9 +22,14 @@ class Marrison_Assistant_Main_Page {
         register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_position');
         register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_color');
         register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_title');
+        register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_name');
         register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_welcome');
         register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_placeholder');
         register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_logged_only');
+        // Colori personalizzabili
+        register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_icon_color');
+        register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_header_color');
+        register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_button_color');
     }
     
     /**
@@ -44,9 +49,6 @@ class Marrison_Assistant_Main_Page {
                 <a href="?page=marrison-assistant&tab=site-agent" class="nav-tab <?php echo $active_tab === 'site-agent' ? 'nav-tab-active' : ''; ?>">
                     <span class="dashicons dashicons-format-chat"></span> Agente Sito
                 </a>
-                <a href="?page=marrison-assistant&tab=whatsapp" class="nav-tab <?php echo $active_tab === 'whatsapp' ? 'nav-tab-active' : ''; ?>">
-                    <span class="dashicons dashicons-smartphone"></span> WhatsApp
-                </a>
                 <a href="?page=marrison-assistant&tab=analytics" class="nav-tab <?php echo $active_tab === 'analytics' ? 'nav-tab-active' : ''; ?>">
                     <span class="dashicons dashicons-chart-bar"></span> Analytics
                 </a>
@@ -57,9 +59,6 @@ class Marrison_Assistant_Main_Page {
                 switch ($active_tab) {
                     case 'site-agent':
                         $this->render_site_agent_tab();
-                        break;
-                    case 'whatsapp':
-                        $this->render_whatsapp_tab();
                         break;
                     case 'analytics':
                         $this->render_analytics_tab();
@@ -142,12 +141,8 @@ class Marrison_Assistant_Main_Page {
             <div class="marrison-card">
                 <h3>API Connections</h3>
                 <p>
-                    <span class="status-indicator <?php echo get_option('marrison_assistant_gemini_api_key') ? 'active' : 'inactive'; ?>"></span>
-                    Gemini API: <?php echo get_option('marrison_assistant_gemini_api_key') ? 'Configurata' : 'Non configurata'; ?>
-                </p>
-                <p>
-                    <span class="status-indicator <?php echo get_option('marrison_assistant_twilio_sid') ? 'active' : 'inactive'; ?>"></span>
-                    Twilio API: <?php echo get_option('marrison_assistant_twilio_sid') ? 'Configurata' : 'Non configurata'; ?>
+                    <span class="status-indicator <?php echo get_option('marrison_assistant_commander_url') ? 'active' : 'inactive'; ?>"></span>
+                    Commander: <?php echo get_option('marrison_assistant_commander_url', 'https://marrisonlab.com'); ?>
                 </p>
             </div>
             
@@ -156,10 +151,6 @@ class Marrison_Assistant_Main_Page {
                 <p>
                     <span class="status-indicator <?php echo get_option('marrison_assistant_enable_site_agent') ? 'active' : 'inactive'; ?>"></span>
                     Agente Sito: <?php echo get_option('marrison_assistant_enable_site_agent') ? 'Attivo' : 'Disattivo'; ?>
-                </p>
-                <p>
-                    <span class="status-indicator <?php echo get_option('marrison_assistant_enable_webhook') ? 'active' : 'inactive'; ?>"></span>
-                    WhatsApp: <?php echo get_option('marrison_assistant_enable_webhook') ? 'Attivo' : 'Disattivo'; ?>
                 </p>
             </div>
         </div>
@@ -176,15 +167,16 @@ class Marrison_Assistant_Main_Page {
                 <table class="form-table">
                     <tr>
                         <th scope="row">
-                            <label for="marrison_assistant_gemini_api_key">API Key Gemini</label>
+                            <label for="marrison_assistant_commander_url">Commander URL</label>
                         </th>
                         <td>
-                            <input type="text" 
-                                   id="marrison_assistant_gemini_api_key" 
-                                   name="marrison_assistant_gemini_api_key" 
-                                   value="<?php echo esc_attr(get_option('marrison_assistant_gemini_api_key')); ?>" 
-                                   class="regular-text">
-                            <p class="description">La tua API Key di Google Gemini</p>
+                            <input type="url" 
+                                   id="marrison_assistant_commander_url" 
+                                   name="marrison_assistant_commander_url" 
+                                   value="<?php echo esc_attr(get_option('marrison_assistant_commander_url', 'https://marrisonlab.com')); ?>" 
+                                   class="regular-text"
+                                   placeholder="https://marrisonlab.com">
+                            <p class="description">URL del sito con Marrison Commander installato. Gestisce le API e le quote.</p>
                         </td>
                     </tr>
                     
@@ -297,19 +289,6 @@ class Marrison_Assistant_Main_Page {
                     
                     <tr>
                         <th scope="row">
-                            <label for="marrison_assistant_site_agent_color">Colore Tema</label>
-                        </th>
-                        <td>
-                            <input type="color" 
-                                   id="marrison_assistant_site_agent_color" 
-                                   name="marrison_assistant_site_agent_color" 
-                                   value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_color', '#0073aa')); ?>">
-                            <p class="description">Colore principale del widget chat</p>
-                        </td>
-                    </tr>
-                    
-                    <tr>
-                        <th scope="row">
                             <label for="marrison_assistant_site_agent_title">Titolo Widget</label>
                         </th>
                         <td>
@@ -318,6 +297,20 @@ class Marrison_Assistant_Main_Page {
                                    name="marrison_assistant_site_agent_title" 
                                    value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_title', 'Assistente AI')); ?>" 
                                    class="regular-text">
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="marrison_assistant_site_agent_name">Nome Assistente</label>
+                        </th>
+                        <td>
+                            <input type="text" 
+                                   id="marrison_assistant_site_agent_name" 
+                                   name="marrison_assistant_site_agent_name" 
+                                   value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_name', 'Marry')); ?>" 
+                                   class="regular-text">
+                            <p class="description">Nome che l'assistente userà per presentarsi (es: "Ciao, sono Marry, il tuo assistente...")</p>
                         </td>
                     </tr>
                     
@@ -343,6 +336,44 @@ class Marrison_Assistant_Main_Page {
                                    name="marrison_assistant_site_agent_placeholder" 
                                    value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_placeholder', 'Scrivi un messaggio...')); ?>" 
                                    class="regular-text">
+                        </td>
+                    </tr>
+
+                    <tr><td colspan="2"><hr><h4>Colori Personalizzati</h4></td></tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="marrison_assistant_site_agent_icon_color">Colore Icona Fluttuante</label>
+                        </th>
+                        <td>
+                            <input type="color" 
+                                   id="marrison_assistant_site_agent_icon_color" 
+                                   name="marrison_assistant_site_agent_icon_color" 
+                                   value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_icon_color', '#667eea')); ?>">
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="marrison_assistant_site_agent_header_color">Colore Testata Chat</label>
+                        </th>
+                        <td>
+                            <input type="color" 
+                                   id="marrison_assistant_site_agent_header_color" 
+                                   name="marrison_assistant_site_agent_header_color" 
+                                   value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_header_color', '#667eea')); ?>">
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="marrison_assistant_site_agent_button_color">Colore Pulsante Invio</label>
+                        </th>
+                        <td>
+                            <input type="color" 
+                                   id="marrison_assistant_site_agent_button_color" 
+                                   name="marrison_assistant_site_agent_button_color" 
+                                   value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_button_color', '#667eea')); ?>">
                         </td>
                     </tr>
                 </table>
@@ -373,106 +404,172 @@ class Marrison_Assistant_Main_Page {
     }
     
     /**
-     * Tab WhatsApp (in sviluppo)
-     */
-    private function render_whatsapp_tab() {
-        ?>
-        <div class="marrison-assistant-section">
-            <h2>WhatsApp Assistant - In Sviluppo</h2>
-            
-            <div class="marrison-card" style="border-left-color: #ffb900;">
-                <h3>Funzionalità in Arrivo</h3>
-                <p>La funzionalità WhatsApp Assistant è attualmente in fase di sviluppo e sarà disponibile in una prossima versione.</p>
-                
-                <h4>Cosa includerà:</h4>
-                <ul>
-                    <li>Integrazione completa con Twilio WhatsApp</li>
-                    <li>Assistente AI automatico per messaggi WhatsApp</li>
-                    <li>Tracking ordini via WhatsApp</li>
-                    <li>Autenticazione utenti WhatsApp</li>
-                    <li>Gestione contatti e conversazioni</li>
-                    <li>Template messaggi e risposte rapide</li>
-                    <li>Analytics e statistiche utilizzo</li>
-                </ul>
-                
-                <h4>Stato Sviluppo:</h4>
-                <div style="background: #f0f6fc; padding: 15px; border-radius: 4px; margin: 10px 0;">
-                    <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                        <span style="color: #ffb900;">&#9673;</span>
-                        <span style="margin-left: 8px;">API Twilio - 80% completato</span>
-                    </div>
-                    <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                        <span style="color: #ffb900;">&#9673;</span>
-                        <span style="margin-left: 8px;">Webhook management - 70% completato</span>
-                    </div>
-                    <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                        <span style="color: #ffb900;">&#9673;</span>
-                        <span style="margin-left: 8px;">Interfaccia admin - 60% completato</span>
-                    </div>
-                    <div style="display: flex; align-items: center;">
-                        <span style="color: #ffb900;">&#9673;</span>
-                        <span style="margin-left: 8px;">Testing e debug - 40% completato</span>
-                    </div>
-                </div>
-                
-                <h4>Per Adesso:</h4>
-                <p>Puoi utilizzare l'<strong>Agente Sito</strong> che è completamente funzionale e include:</p>
-                <ul>
-                    <li>Widget chat personalizzabile</li>
-                    <li>Integrazione con Gemini AI</li>
-                    <li>Supporto per utenti loggati/visitatori</li>
-                    <li>Design responsive e moderno</li>
-                    <li>Analytics di utilizzo</li>
-                </ul>
-                
-                <div style="background: #e6f4ea; padding: 15px; border-radius: 4px; margin-top: 15px;">
-                    <strong>Prossimo Aggiornamento Previsto:</strong> Versione 1.1.0 (Q2 2026)<br>
-                    <strong>Focus:</strong> Completamento integrazione WhatsApp
-                </div>
-            </div>
-            
-            <div class="marrison-card">
-                <h3>Notifiche Disponibili</h3>
-                <p>Vuoi essere avvisato quando WhatsApp Assistant sarà disponibile?</p>
-                
-                <form method="post" action="">
-                    <input type="email" placeholder="La tua email" style="margin-right: 10px; padding: 8px;" required>
-                    <button type="submit" class="button button-primary">Avvisami</button>
-                </form>
-                
-                <p style="font-size: 12px; color: #666; margin-top: 10px;">
-                    Ti invieremo una notifica email quando la funzionalità sarà pronta. 
-                    Nessun spam, promesso!
-                </p>
-            </div>
-        </div>
-        <?php
-    }
-    
-    /**
-     * Tab analytics
+     * Tab analytics — Monitoraggio consumo token Gemini
      */
     private function render_analytics_tab() {
+        $log = get_option('marrison_assistant_token_log', array());
+
+        // Calcola totali
+        $tot_messages   = count($log);
+        $tot_bytes      = 0;
+        $tot_est        = 0;
+        $tot_real_in    = 0;
+        $tot_real_out   = 0;
+        $tot_real_total = 0;
+        $has_real       = false;
+        foreach ($log as $entry) {
+            $tot_bytes   += (int) ($entry['prompt_bytes']       ?? 0);
+            $tot_est     += (int) ($entry['prompt_tokens_est']  ?? 0);
+            if (!is_null($entry['prompt_tokens_real'] ?? null)) {
+                $tot_real_in    += (int) $entry['prompt_tokens_real'];
+                $tot_real_out   += (int) ($entry['output_tokens']  ?? 0);
+                $tot_real_total += (int) ($entry['total_tokens']   ?? 0);
+                $has_real = true;
+            }
+        }
+
+        $intent_labels = array(
+            'products' => '🛍️ Prodotti',
+            'orders'   => '📦 Ordini',
+            'info'     => 'ℹ️ Info',
+            'events'   => '📅 Eventi',
+            'general'  => '🔍 Generale',
+        );
         ?>
         <div class="marrison-assistant-section">
-            <h2>Statistiche Utilizzo</h2>
-            
-            <div class="marrison-card">
-                <h3>WhatsApp</h3>
-                <p>Messaggi ricevuti oggi: <strong>0</strong></p>
-                <p>Messaggi inviati oggi: <strong>0</strong></p>
-                <p>Utenti attivi oggi: <strong>0</strong></p>
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                <h2 style="margin:0;">📊 Monitoraggio Token Gemini</h2>
+                <button type="button" id="marrison-reset-token-log" class="button button-secondary">
+                    🗑️ Reset log
+                </button>
             </div>
-            
-            <div class="marrison-card">
-                <h3>Agente Sito</h3>
-                <p>Chat aperte oggi: <strong>0</strong></p>
-                <p>Messaggi scambiati oggi: <strong>0</strong></p>
-                <p>Tasso di risposta: <strong>0%</strong></p>
+            <p style="color:#666; margin-top:8px;">
+                Ogni riga corrisponde a un messaggio inviato al Commander. 
+                <?php if (!$has_real): ?>
+                    <em>I token reali non sono disponibili (usageMetadata non restituito dal Commander). Vengono mostrati i token stimati.</em>
+                <?php endif; ?>
+            </p>
+
+            <?php if (empty($log)): ?>
+                <p><em>Nessuna conversazione registrata. Inizia una chat per vedere i dati.</em></p>
+            <?php else: ?>
+
+            <!-- Tabella riepilogo -->
+            <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px;">
+                <div style="background:#f0f6fc; border:1px solid #b3d4f7; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
+                    <div style="font-size:24px; font-weight:700; color:#0073aa;"><?php echo $tot_messages; ?></div>
+                    <div style="font-size:12px; color:#555;">Messaggi totali</div>
+                </div>
+                <div style="background:#f0f6fc; border:1px solid #b3d4f7; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
+                    <div style="font-size:24px; font-weight:700; color:#0073aa;"><?php echo number_format($tot_est); ?></div>
+                    <div style="font-size:12px; color:#555;">Token stimati totali</div>
+                </div>
+                <?php if ($has_real): ?>
+                <div style="background:#edfaed; border:1px solid #84c484; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
+                    <div style="font-size:24px; font-weight:700; color:#2a7a2a;"><?php echo number_format($tot_real_total); ?></div>
+                    <div style="font-size:12px; color:#555;">Token reali totali</div>
+                </div>
+                <div style="background:#edfaed; border:1px solid #84c484; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
+                    <div style="font-size:24px; font-weight:700; color:#2a7a2a;"><?php echo number_format($tot_real_in); ?> / <?php echo number_format($tot_real_out); ?></div>
+                    <div style="font-size:12px; color:#555;">Token reali in / out</div>
+                </div>
+                <?php endif; ?>
+                <div style="background:#f9f0ff; border:1px solid #c9a0f7; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
+                    <div style="font-size:24px; font-weight:700; color:#6a0dad;"><?php echo number_format(round($tot_bytes / 1024, 1)); ?> KB</div>
+                    <div style="font-size:12px; color:#555;">Bytes prompt totali</div>
+                </div>
             </div>
-            
-            <p><em>Funzionalità analytics in sviluppo. Presto disponibili statistiche dettagliate!</em></p>
+
+            <!-- Tabella dettaglio -->
+            <div style="overflow-x:auto;">
+                <table class="widefat fixed striped" style="font-size:13px;">
+                    <thead>
+                        <tr>
+                            <th style="width:130px;">#&nbsp;Ora</th>
+                            <th style="width:110px;">Intent</th>
+                            <th style="width:90px; text-align:right;">Bytes prompt</th>
+                            <th style="width:110px; text-align:right;">Token stimati</th>
+                            <?php if ($has_real): ?>
+                            <th style="width:110px; text-align:right;">Token reali in</th>
+                            <th style="width:110px; text-align:right;">Token reali out</th>
+                            <th style="width:100px; text-align:right;">Totale reale</th>
+                            <?php endif; ?>
+                            <th style="width:80px; text-align:center;">Qualità</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php
+                    $rows = array_reverse($log); // più recenti prima
+                    foreach ($rows as $i => $e) {
+                        $intent_lbl = isset($intent_labels[$e['intent']]) ? $intent_labels[$e['intent']] : esc_html($e['intent']);
+                        $est        = (int) ($e['prompt_tokens_est'] ?? 0);
+                        $real_in    = $e['prompt_tokens_real'] ?? null;
+                        $real_out   = $e['output_tokens']      ?? null;
+                        $real_tot   = $e['total_tokens']       ?? null;
+
+                        // Semaforo qualità basato su token stimati
+                        if ($est < 2000)       { $quality = '🟢'; $quality_title = 'Ottimale (<2K)'; }
+                        elseif ($est < 5000)   { $quality = '🟡'; $quality_title = 'Accettabile (2-5K)'; }
+                        else                   { $quality = '🔴'; $quality_title = 'Alto (>5K)'; }
+                        ?>
+                        <tr>
+                            <td style="font-size:11px;"><?php echo date('d/m H:i:s', (int)$e['time']); ?></td>
+                            <td><?php echo $intent_lbl; ?></td>
+                            <td style="text-align:right;"><?php echo number_format((int)($e['prompt_bytes'] ?? 0)); ?></td>
+                            <td style="text-align:right; font-weight:600;"><?php echo number_format($est); ?></td>
+                            <?php if ($has_real): ?>
+                            <td style="text-align:right;"><?php echo !is_null($real_in)  ? number_format((int)$real_in)  : '<span style="color:#aaa">—</span>'; ?></td>
+                            <td style="text-align:right;"><?php echo !is_null($real_out) ? number_format((int)$real_out) : '<span style="color:#aaa">—</span>'; ?></td>
+                            <td style="text-align:right;"><?php echo !is_null($real_tot) ? number_format((int)$real_tot) : '<span style="color:#aaa">—</span>'; ?></td>
+                            <?php endif; ?>
+                            <td style="text-align:center;" title="<?php echo esc_attr($quality_title); ?>"><?php echo $quality; ?></td>
+                        </tr>
+                        <?php
+                    }
+                    ?>
+                    </tbody>
+                    <tfoot>
+                        <tr style="background:#f0f0f0; font-weight:bold;">
+                            <td colspan="2">TOTALE (<?php echo $tot_messages; ?> msg)</td>
+                            <td style="text-align:right;"><?php echo number_format($tot_bytes); ?></td>
+                            <td style="text-align:right;"><?php echo number_format($tot_est); ?></td>
+                            <?php if ($has_real): ?>
+                            <td style="text-align:right;"><?php echo number_format($tot_real_in); ?></td>
+                            <td style="text-align:right;"><?php echo number_format($tot_real_out); ?></td>
+                            <td style="text-align:right;"><?php echo number_format($tot_real_total); ?></td>
+                            <?php endif; ?>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <?php endif; ?>
         </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            $('#marrison-reset-token-log').on('click', function() {
+                if (!confirm('Azzerare il log token? I dati non saranno recuperabili.')) return;
+                var $btn = $(this).prop('disabled', true).text('Resetting…');
+                $.post(ajaxurl, {
+                    action: 'marrison_reset_token_log',
+                    nonce:  marrisonAdmin.nonce
+                })
+                .done(function(r) {
+                    if (r.success) {
+                        location.reload();
+                    } else {
+                        alert('Errore: ' + (r.data || 'sconosciuto'));
+                        $btn.prop('disabled', false).html('🗑️ Reset log');
+                    }
+                })
+                .fail(function() {
+                    alert('Errore di rete.');
+                    $btn.prop('disabled', false).html('🗑️ Reset log');
+                });
+            });
+        });
+        </script>
         <?php
     }
 }

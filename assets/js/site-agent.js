@@ -11,6 +11,51 @@ jQuery(document).ready(function($) {
     let sendButton = null;
     let isOpen = false;
     let messageCount = 0;
+
+    // Stato conversazione
+    let conversationState = {
+        step: 'initial', // initial | ready
+        intent: null,    // products | orders | info | events | general
+        history: []      // ultimi 2 turni {u: userMsg, b: botMsg}
+    };
+
+    // Chiavi sessionStorage
+    const SS_MSGS  = 'marrison_msgs';
+    const SS_STATE = 'marrison_state';
+    const SS_OPEN  = 'marrison_open';
+
+    function saveSession() {
+        try {
+            const $clone = chatMessages.clone();
+            $clone.find('#marrison-intent-buttons').remove();
+            sessionStorage.setItem(SS_MSGS,  $clone.html());
+            sessionStorage.setItem(SS_STATE, JSON.stringify(conversationState));
+            sessionStorage.setItem(SS_OPEN,  isOpen ? '1' : '0');
+        } catch(e) {}
+    }
+
+    function restoreSession() {
+        try {
+            const savedMsgs  = sessionStorage.getItem(SS_MSGS);
+            const savedState = sessionStorage.getItem(SS_STATE);
+            const savedOpen  = sessionStorage.getItem(SS_OPEN);
+
+            if (savedMsgs) {
+                chatMessages.html(savedMsgs);
+                scrollToBottom();
+            }
+            if (savedState) {
+                const st = JSON.parse(savedState);
+                conversationState.step    = st.step    || 'initial';
+                conversationState.intent  = st.intent  || null;
+                conversationState.history = st.history || [];
+            }
+            if (savedOpen === '1') {
+                chatWindow.addClass('open');
+                isOpen = true;
+            }
+        } catch(e) {}
+    }
     
     // Inizializzazione
     function init() {
@@ -26,7 +71,7 @@ jQuery(document).ready(function($) {
         sendButton.on('click', sendMessage);
         chatTextarea.on('keydown', handleKeyDown);
         chatTextarea.on('input', handleInput);
-        
+
         // Auto-resize textarea
         chatTextarea.on('input', autoResize);
         
@@ -49,6 +94,7 @@ jQuery(document).ready(function($) {
     function openChat() {
         chatWindow.addClass('open');
         isOpen = true;
+        saveSession();
         chatTextarea.focus();
         
         // Traccia apertura chat
@@ -63,36 +109,101 @@ jQuery(document).ready(function($) {
     function closeChat() {
         chatWindow.removeClass('open');
         isOpen = false;
+        saveSession();
     }
     
+    // Rileva intento dal messaggio
+    function detectIntent(message) {
+        const lowerMsg = message.toLowerCase();
+
+        // Pattern per ordini
+        if (/\b(ordine|ordini|acquisto|acquisti|tracking|spedizione|pacco|consegna|stato ordine|numero ordine|#\d+)\b/.test(lowerMsg)) {
+            return 'orders';
+        }
+
+        // Pattern per prodotti
+        if (/\b(prodotto|prodotti|maglietta|magliette|felpa|felpe|maglia|maglie|hoodie|giacca|giacche|pantaloni|pantalone|scarpa|scarpe|cappello|cappelli|vestito|vestiti|abbigliamento|accessori|borsa|borse|bermuda|shorts|costume|cappotto|giubbotto|maglione|cardigan|camicia|camicie|gonna|gonne|leggings|calze|cintura|collezione|catalogo|shop|negozio|acquista|compra|prezzo|costo|colore|taglia|disponibile|stock|saldo|offerta|sconto|nuovo|novità)\b/.test(lowerMsg)) {
+            return 'products';
+        }
+
+        // Pattern per eventi
+        if (/\b(evento|eventi|calendario|appuntamento|quando|data|incontro|workshop|seminario)\b/.test(lowerMsg)) {
+            return 'events';
+        }
+
+        // Pattern per informazioni generali
+        if (/\b(chi siete|contatti|dove siete|indirizzo|orari|telefono|email|servizi|chi siamo|about|info)\b/.test(lowerMsg)) {
+            return 'info';
+        }
+
+        return 'general';
+    }
+
+    // Gestisce il routing intent: se l'utente scrive senza aver cliccato un bottone,
+    // rimuove i bottoni, rileva l'intent dal testo e procede direttamente.
+    function handleQuestionnaire(message) {
+        // Rimuovi i bottoni se ancora visibili
+        $('#marrison-intent-buttons').fadeOut(200, function() { $(this).remove(); });
+
+        if (conversationState.step === 'ready') {
+            return true; // Intent già impostato da bottone o da messaggio precedente
+        }
+
+        // Primo messaggio senza bottone: rileva intent e vai diretto
+        const intent = detectIntent(message);
+        conversationState.intent = intent;
+        conversationState.step   = 'ready';
+        return true;
+    }
+
     // Send message
     function sendMessage() {
         const message = chatTextarea.val().trim();
-        
+
         if (!message) return;
-        
+
         // Disable send button
         sendButton.prop('disabled', true);
-        
+
         // Add user message
         addMessage(message, 'user');
         chatTextarea.val('');
         autoResize();
-        
+
+        // Gestisci questionario
+        const shouldSend = handleQuestionnaire(message);
+        if (!shouldSend) {
+            sendButton.prop('disabled', false);
+            return;
+        }
+
         // Show typing indicator
         showTyping();
-        
-        // Send to server
+
+        // Send to server con intento e storico
         $.post(marrisonAgent.ajaxUrl, {
             action: 'marrison_site_agent_chat',
             message: message,
-            nonce: marrisonAgent.nonce
+            intent:  conversationState.intent || 'general',
+            history: JSON.stringify(conversationState.history),
+            nonce:   marrisonAgent.nonce
         })
         .done(function(response) {
             hideTyping();
-            
+
             if (response.success) {
-                addMessage(response.data.message, 'bot', response.data.time);
+                const botMsg = response.data.message;
+                addMessage(botMsg, 'bot', response.data.time);
+                // Aggiorna storico: max 2 turni, messaggi troncati
+                conversationState.history.push({
+                    u: message.substring(0, 120),
+                    b: botMsg.substring(0, 100)
+                });
+                if (conversationState.history.length > 2) {
+                    conversationState.history.shift();
+                }
+            } else if (response.data && response.data.code === 'rate_limited') {
+                addMessage('⏳ ' + response.data.message, 'bot');
             } else {
                 addMessage('Mi dispiace, ho avuto un problema. Riprova più tardi.', 'bot');
             }
@@ -123,39 +234,73 @@ jQuery(document).ready(function($) {
         
         chatMessages.append(messageHtml);
         scrollToBottom();
-        
+        saveSession();
+
         messageCount++;
         updateBadge();
     }
     
-    // Format message text: convert URLs to links and markdown bold to HTML
+    // Format message text: convert markdown to HTML with proper escaping
     function formatMessageText(text) {
         if (!text) return '';
-        
-        // First escape HTML to prevent XSS
-        let formatted = escapeHtml(text);
-        
-        // Convert markdown bold (**text**) to HTML <strong>
-        formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        
-        // Convert markdown italic (*text*) to HTML <em>
-        formatted = formatted.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
-        
-        // Convert URLs to clickable links
-        // Match http, https, and www URLs
-        const urlRegex = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/g;
-        formatted = formatted.replace(urlRegex, function(url) {
-            let href = url;
-            if (url.startsWith('www.')) {
-                href = 'https://' + url;
+
+        // Dividi in parti: testo normale vs link markdown
+        const parts = [];
+        let lastIndex = 0;
+        const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s<]+)\)/g;
+        let match;
+
+        while ((match = linkRegex.exec(text)) !== null) {
+            if (match.index > lastIndex) {
+                parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
             }
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: underline; font-weight: 500;">${url}</a>`;
+            parts.push({ type: 'link', linkText: match[1], url: match[2] });
+            lastIndex = match.index + match[0].length;
+        }
+
+        if (lastIndex < text.length) {
+            parts.push({ type: 'text', content: text.slice(lastIndex) });
+        }
+
+        if (parts.length === 0) {
+            parts.push({ type: 'text', content: text });
+        }
+
+        // Processa ogni parte
+        let result = '';
+        parts.forEach(part => {
+            if (part.type === 'text') {
+                // PRIMA: Converti markdown bold/italic su testo raw
+                let formatted = part.content;
+                formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+                formatted = formatted.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+                // POI: Escape HTML nel testo (preserva i tag <strong> e <em> creati)
+                // Dividi per tag HTML e fai escape solo sul testo
+                const segments = formatted.split(/(<\/?(?:strong|em)>)/g);
+                let escaped = '';
+                segments.forEach(seg => {
+                    if (seg === '<strong>' || seg === '</strong>' || seg === '<em>' || seg === '</em>') {
+                        escaped += seg; // preserva tag HTML
+                    } else {
+                        escaped += escapeHtml(seg); // escape testo
+                    }
+                });
+
+                // Converti URL plain in link
+                escaped = escaped.replace(/(https?:\/\/[^\s<]+|www\.[^\s<]+)/g, function(url) {
+                    let href = url;
+                    if (url.startsWith('www.')) href = 'https://' + url;
+                    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+                });
+                result += escaped;
+            } else {
+                const safeText = escapeHtml(part.linkText);
+                result += `<a href="${part.url}" target="_blank" rel="noopener noreferrer">${safeText}</a>`;
+            }
         });
-        
-        // Convert line breaks to <br>
-        formatted = formatted.replace(/\n/g, '<br>');
-        
-        return formatted;
+
+        return result.replace(/\n/g, '<br>');
     }
     
     // Show typing indicator
@@ -244,6 +389,35 @@ jQuery(document).ready(function($) {
     
     // Initialize when ready
     init();
+    restoreSession();
+
+    // Bottoni di routing categoria — registrati dopo init() per evitare problemi di scope
+    const intentResponses = {
+        products: 'Perfetto! Dimmi cosa cerchi: un prodotto, un colore o una taglia?',
+        orders:   'Certo! Dimmi il numero ordine o cosa vorresti sapere sull\'acquisto.',
+        info:     'Con piacere! Su cosa vorresti informazioni? Azienda, contatti, servizi?',
+        events:   'Ottimo! Stai cercando un evento specifico o vuoi vedere il calendario?'
+    };
+    const intentLabels = {
+        products: '🛍️ Prodotti',
+        orders:   '📦 Ordini',
+        info:     'ℹ️ Info',
+        events:   '📅 Eventi'
+    };
+    $(document).on('click', '.marrison-intent-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const intent = $(this).data('intent');
+        $('#marrison-intent-buttons').fadeOut(200, function() { $(this).remove(); });
+        conversationState.step   = 'ready';
+        conversationState.intent = intent;
+        addMessage('Ho bisogno di aiuto con: ' + (intentLabels[intent] || intent), 'user');
+        setTimeout(function() {
+            addMessage(intentResponses[intent] || 'Dimmi pure!', 'bot');
+            saveSession();
+            chatTextarea.focus();
+        }, 300);
+    });
     
     // Add welcome message if needed
     if (marrisonAgent.welcome && $('.marrison-message').length === 1) {

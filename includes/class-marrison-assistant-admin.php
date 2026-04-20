@@ -73,12 +73,9 @@ class Marrison_Assistant_Admin {
      * Registra le impostazioni del plugin
      */
     public function register_settings() {
+        register_setting('marrison_assistant_settings', 'marrison_assistant_commander_url');
         register_setting('marrison_assistant_settings', 'marrison_assistant_gemini_api_key');
-        register_setting('marrison_assistant_settings', 'marrison_assistant_twilio_sid');
-        register_setting('marrison_assistant_settings', 'marrison_assistant_twilio_auth_token');
-        register_setting('marrison_assistant_settings', 'marrison_assistant_twilio_whatsapp_number');
         register_setting('marrison_assistant_settings', 'marrison_assistant_custom_prompt');
-        register_setting('marrison_assistant_settings', 'marrison_assistant_enable_webhook');
         register_setting('marrison_assistant_settings', 'marrison_assistant_logged_only');
         
         // Impostazioni agente sito
@@ -86,8 +83,13 @@ class Marrison_Assistant_Admin {
         register_setting('marrison_assistant_settings', 'marrison_assistant_site_agent_position');
         register_setting('marrison_assistant_settings', 'marrison_assistant_site_agent_color');
         register_setting('marrison_assistant_settings', 'marrison_assistant_site_agent_title');
+        register_setting('marrison_assistant_settings', 'marrison_assistant_site_agent_name');
         register_setting('marrison_assistant_settings', 'marrison_assistant_site_agent_welcome');
         register_setting('marrison_assistant_settings', 'marrison_assistant_site_agent_placeholder');
+        // Colori personalizzabili
+        register_setting('marrison_assistant_settings', 'marrison_assistant_site_agent_icon_color');
+        register_setting('marrison_assistant_settings', 'marrison_assistant_site_agent_header_color');
+        register_setting('marrison_assistant_settings', 'marrison_assistant_site_agent_button_color');
     }
     
     /**
@@ -134,63 +136,19 @@ class Marrison_Assistant_Admin {
                         <table class="form-table">
                             <tr>
                                 <th scope="row">
-                                    <label for="marrison_assistant_gemini_api_key">Google Gemini API Key</label>
+                                    <label for="marrison_assistant_commander_url">Commander URL</label>
                                 </th>
                                 <td>
-                                    <input type="text" 
-                                           id="marrison_assistant_gemini_api_key" 
-                                           name="marrison_assistant_gemini_api_key" 
-                                           value="<?php echo esc_attr(get_option('marrison_assistant_gemini_api_key')); ?>" 
+                                    <input type="url" 
+                                           id="marrison_assistant_commander_url" 
+                                           name="marrison_assistant_commander_url" 
+                                           value="<?php echo esc_attr(get_option('marrison_assistant_commander_url', 'https://marrisonlab.com')); ?>" 
                                            class="regular-text"
-                                           placeholder="Inserisci la tua API Key di Google Gemini">
-                                    <p class="description">Ottieni la API Key dal <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></p>
+                                           placeholder="https://marrisonlab.com">
+                                    <p class="description">URL del sito con <strong>Marrison Commander</strong> installato. Gestisce API keys e quote giornaliere.</p>
                                 </td>
                             </tr>
                             
-                            <tr>
-                                <th scope="row">
-                                    <label for="marrison_assistant_twilio_sid">Twilio Account SID</label>
-                                </th>
-                                <td>
-                                    <input type="text" 
-                                           id="marrison_assistant_twilio_sid" 
-                                           name="marrison_assistant_twilio_sid" 
-                                           value="<?php echo esc_attr(get_option('marrison_assistant_twilio_sid')); ?>" 
-                                           class="regular-text"
-                                           placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
-                                    <p class="description">Il tuo Account SID da Twilio Console</p>
-                                </td>
-                            </tr>
-                            
-                            <tr>
-                                <th scope="row">
-                                    <label for="marrison_assistant_twilio_auth_token">Twilio Auth Token</label>
-                                </th>
-                                <td>
-                                    <input type="password" 
-                                           id="marrison_assistant_twilio_auth_token" 
-                                           name="marrison_assistant_twilio_auth_token" 
-                                           value="<?php echo esc_attr(get_option('marrison_assistant_twilio_auth_token')); ?>" 
-                                           class="regular-text"
-                                           placeholder="Inserisci il tuo Auth Token">
-                                    <p class="description">Il tuo Auth Token da Twilio Console</p>
-                                </td>
-                            </tr>
-                            
-                            <tr>
-                                <th scope="row">
-                                    <label for="marrison_assistant_twilio_whatsapp_number">Numero WhatsApp Twilio</label>
-                                </th>
-                                <td>
-                                    <input type="text" 
-                                           id="marrison_assistant_twilio_whatsapp_number" 
-                                           name="marrison_assistant_twilio_whatsapp_number" 
-                                           value="<?php echo esc_attr(get_option('marrison_assistant_twilio_whatsapp_number')); ?>" 
-                                           class="regular-text"
-                                           placeholder="whatsapp:+14155238886">
-                                    <p class="description">Formato: whatsapp:+14155238886 (numero Sandbox o tuo numero Twilio)</p>
-                                </td>
-                            </tr>
                         </table>
                     </div>
                     
@@ -213,21 +171,6 @@ class Marrison_Assistant_Admin {
                             
                             <tr>
                                 <th scope="row">
-                                    <label for="marrison_assistant_enable_webhook">Abilita Webhook</label>
-                                </th>
-                                <td>
-                                    <input type="checkbox" 
-                                           id="marrison_assistant_enable_webhook" 
-                                           name="marrison_assistant_enable_webhook" 
-                                           value="1" 
-                                           <?php checked(get_option('marrison_assistant_enable_webhook'), 1); ?>>
-                                    <label for="marrison_assistant_enable_webhook">Abilita ricezione messaggi WhatsApp</label>
-                                    <p class="description">Spunta per abilitare l'endpoint webhook che riceve i messaggi da Twilio</p>
-                                </td>
-                            </tr>
-                            
-                            <tr>
-                                <th scope="row">
                                     <label for="marrison_assistant_logged_only">Solo Utenti Loggati</label>
                                 </th>
                                 <td>
@@ -237,7 +180,7 @@ class Marrison_Assistant_Admin {
                                            value="1" 
                                            <?php checked(get_option('marrison_assistant_logged_only'), 1); ?>>
                                     <label for="marrison_assistant_logged_only">Attiva assistente solo per utenti loggati</label>
-                                    <p class="description">Limita le risposte dell'assistente solo agli utenti WhatsApp autenticati. Utile per B2B o assistenza premium.</p>
+                                    <p class="description">Limita l'accesso all'assistente solo agli utenti loggati. Utile per aree riservate o assistenza premium.</p>
                                 </td>
                             </tr>
                         </table>
@@ -269,16 +212,6 @@ class Marrison_Assistant_Admin {
                             </tr>
                             
                             <tr>
-                                <th scope="row">Test API Twilio</th>
-                                <td>
-                                    <button type="button" id="test-twilio" class="button button-secondary">
-                                        Testa Connessione Twilio
-                                    </button>
-                                    <span id="twilio-test-result" class="test-result"></span>
-                                </td>
-                            </tr>
-                            
-                            <tr>
                                 <th scope="row">Scansione Contenuti</th>
                                 <td>
                                     <button type="button" id="scan-content" class="button button-secondary">
@@ -286,20 +219,6 @@ class Marrison_Assistant_Admin {
                                     </button>
                                     <span id="scan-result" class="test-result"></span>
                                     <p class="description">Scansiona pagine, articoli e prodotti WooCommerce per creare la knowledge base</p>
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                    
-                    <div class="marrison-assistant-section">
-                        <h2>📊 Informazioni Webhook</h2>
-                        
-                        <table class="form-table">
-                            <tr>
-                                <th scope="row">URL Webhook Twilio</th>
-                                <td>
-                                    <code><?php echo esc_url(home_url('/wp-json/wa-ai/v1/incoming')); ?></code>
-                                    <p class="description">Configura questo URL nel tuo numero Twilio come webhook per i messaggi in arrivo</p>
                                 </td>
                             </tr>
                         </table>
@@ -387,36 +306,6 @@ class Marrison_Assistant_Admin {
                     method: 'POST',
                     data: {
                         action: 'marrison_test_gemini',
-                        nonce: '<?php echo wp_create_nonce("marrison_test_nonce"); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            $result.removeClass('test-loading').addClass('test-success').text('✓ Connessione riuscita');
-                        } else {
-                            $result.removeClass('test-loading').addClass('test-error').text('✗ Errore: ' + response.data);
-                        }
-                    },
-                    error: function() {
-                        $result.removeClass('test-loading').addClass('test-error').text('✗ Errore di connessione');
-                    },
-                    complete: function() {
-                        $button.prop('disabled', false);
-                    }
-                });
-            });
-            
-            $('#test-twilio').click(function() {
-                var $button = $(this);
-                var $result = $('#twilio-test-result');
-                
-                $button.prop('disabled', true);
-                $result.removeClass('test-success test-error').addClass('test-loading').text('Test in corso...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    method: 'POST',
-                    data: {
-                        action: 'marrison_test_twilio',
                         nonce: '<?php echo wp_create_nonce("marrison_test_nonce"); ?>'
                     },
                     success: function(response) {
