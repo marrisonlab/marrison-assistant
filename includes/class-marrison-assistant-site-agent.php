@@ -186,6 +186,10 @@ class Marrison_Assistant_Site_Agent {
                         </svg>
                     </button>
                 </div>
+                <!-- Footer credit -->
+                <div style="padding: 4px 0; text-align: center; background: #f8fafc; border-top: 1px solid #e2e8f0;">
+                    <a href="https://marrisonlab.com" target="_blank" rel="noopener noreferrer" style="font-size: 10px; color: #94a3b8; text-decoration: none; transition: color 0.2s;">Powered by Marrisonlab</a>
+                </div>
             </div>
         </div>
         <?php

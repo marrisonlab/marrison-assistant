@@ -1,23 +1,28 @@
 # Marrison Assistant Plugin WordPress
 
-Plugin WordPress per assistente AI con integrazione WhatsApp e Google Gemini.
+Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
+
+**Versione:** 1.0.1  
+**Autore:** [Marrisonlab](https://marrisonlab.com)
 
 ## 🎯 Funzionalità
 
-- **Integrazione WhatsApp** tramite Twilio API
+- **Widget Chat** integrato nel frontend del sito
 - **Integrazione AI** tramite Google Gemini API
-- **Scansione contenuti** del sito (pagine, articoli, prodotti WooCommerce)
+- **Scansione contenuti** del sito (pagine, articoli, prodotti WooCommerce, ordini)
 - **Knowledge base** automatica dai contenuti del sito
-- **Webhook** per ricevere messaggi WhatsApp
-- **Pannello admin** per configurazione
+- **RAG (Retrieval-Augmented Generation)** per risposte contestuali
+- **Rate limiting** integrato contro abusi
+- **Analytics token** per monitorare consumo API
+- **Pannello admin** per configurazione completa
+- **Aggiornamenti automatici** da GitHub Releases
 
 ## 📋 Requisiti
 
 - WordPress 5.0+
 - PHP 7.4+
-- Account Twilio con WhatsApp Sandbox
 - Account Google AI Studio per API Gemini
-- WooCommerce (opzionale, per prodotti)
+- WooCommerce (opzionale, per prodotti e ordini)
 
 ## 🚀 Installazione
 
@@ -33,20 +38,12 @@ Plugin WordPress per assistente AI con integrazione WhatsApp e Google Gemini.
 2. Crea una nuova API Key
 3. Inserisci la API Key nel campo "Google Gemini API Key"
 
-### 2. Twilio WhatsApp
+### 2. Commander API (opzionale)
 
-1. Crea un account su [Twilio](https://www.twilio.com/)
-2. Configura il WhatsApp Sandbox
-3. Ottieni Account SID e Auth Token
-4. Inserisci i dati nei rispettivi campi
-5. Configura il webhook URL in Twilio
+Per maggiore sicurezza, puoi usare il **Marrison Commander** come proxy per le chiamate Gemini:
 
-### 3. Webhook URL
-
-Il webhook URL da configurare in Twilio è:
-```
-https://tuosito.com/wp-json/wa-ai/v1/incoming
-```
+1. Configura l'URL del Commander nelle impostazioni
+2. Il Commander gestirà le chiamate API al posto del sito direttamente
 
 ## 🔧 Utilizzo
 
@@ -76,25 +73,34 @@ Se un utente chiede di un prodotto specifico, fornisci prezzo e descrizione.
 
 ```
 marrison-assistant/
-├── marrison-assistant.php          # File principale
+├── marrison-assistant.php              # File principale
 ├── includes/
-│   ├── class-marrison-assistant-admin.php      # Pagina admin
-│   ├── class-marrison-assistant-api.php        # REST API
+│   ├── class-marrison-assistant-admin.php      # Admin base
+│   ├── class-marrison-assistant-main-page.php  # Pagina admin principale
+│   ├── class-marrison-assistant-api.php        # REST API & AJAX
 │   ├── class-marrison-assistant-gemini.php     # Integrazione Gemini
-│   ├── class-marrison-assistant-twilio.php     # Integrazione Twilio
-│   └── class-marrison-assistant-content-scanner.php  # Scansione contenuti
+│   ├── class-marrison-assistant-site-agent.php # Widget chat frontend
+│   ├── class-marrison-assistant-content-scanner.php  # Scansione contenuti
+│   └── class-marrison-assistant-order-scanner.php    # Scansione ordini
 ├── assets/
-│   ├── admin.js                    # Script admin
-│   └── admin.css                   # Stili admin
+│   ├── css/
+│   │   ├── admin.css               # Stili admin
+│   │   └── site-agent.css          # Stili widget chat
+│   └── js/
+│       ├── admin.js                # Script admin
+│       └── site-agent.js           # Script widget chat
+├── docs/
+│   └── costo-api-gemini.md         # Documentazione costi
 └── readme.md                       # Documentazione
 ```
 
 ## 🔐 Sicurezza
 
 - Sanitizzazione input con funzioni WordPress
-- Verifica nonce per operazioni admin
-- Validazione base webhook Twilio
+- Verifica nonce per operazioni admin e AJAX
+- Rate limiting (10 req/min, 80 req/ora per IP)
 - SSL verification per chiamate API
+- IP hash anonimizzato per rate limiting
 
 ## 🐛 Debug
 
@@ -118,17 +124,22 @@ Per problemi o domande, controlla i log di WordPress e assicurati che:
 
 ## 🔄 Flow di Messaggi
 
-1. Utente invia messaggio WhatsApp al numero Twilio
-2. Twilio invia webhook al plugin WordPress
-3. Plugin recupera knowledge base del sito
-4. Costruisce prompt completo con istruzioni admin
-5. Invia a Google Gemini API
-6. Riceve risposta e la invia a Twilio
-7. Twilio consegna messaggio all'utente
+1. Utente scrive nella chat widget sul sito
+2. Il frontend invia richiesta AJAX al backend
+3. Il plugin applica rate limiting e validazione
+4. Recupera knowledge base del sito tramite RAG
+5. Costruisce prompt compatto con contesto e storico
+6. Invia a Google Gemini API (o al Commander proxy)
+7. Riceve risposta e la mostra nella chat
 
 ## 📝 Note
 
-- Plugin MVP per test e sviluppo
+- Plugin pronto per produzione
 - Richiede connessione internet funzionante
-- I costi API dipendono da Twilio e Google
+- I costi API dipendono da Google Gemini
 - Consigliato per siti con contenuti strutturati
+- Aggiornamenti automatici tramite GitHub Releases
+
+## 🔄 Aggiornamenti
+
+Il plugin supporta aggiornamenti automatici da GitHub. Quando pubblichi una nuova release su `https://github.com/marrisonlab/marrison-assistant/releases/`, WordPress rileverà automaticamente l'aggiornamento disponibile.

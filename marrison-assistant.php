@@ -1,9 +1,11 @@
 <?php
 /**
  * Plugin Name: Marrison Assistant
+ * Plugin URI: https://github.com/marrisonlab/marrison-assistant
  * Description: Plugin WordPress per assistente AI con Google Gemini
- * Version: 1.0.0
- * Author: Marrison Assistant Team
+ * Version: 1.0.1
+ * Author: Marrisonlab
+ * Author URI: https://marrisonlab.com
  * Text Domain: marrison-assistant
  */
 
@@ -13,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definisci costanti del plugin
-define('MARRISON_ASSISTANT_VERSION', '1.0.0');
+define('MARRISON_ASSISTANT_VERSION', '1.0.1');
 define('MARRISON_ASSISTANT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MARRISON_ASSISTANT_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -25,6 +27,7 @@ require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-
 require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-content-scanner.php';
 require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-order-scanner.php';
 require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-auth.php';
+require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-updater.php';
 
 /**
  * Classe principale del plugin
