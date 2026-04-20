@@ -208,9 +208,18 @@ jQuery(document).ready(function($) {
                 addMessage('Mi dispiace, ho avuto un problema. Riprova più tardi.', 'bot');
             }
         })
-        .fail(function() {
+        .fail(function(xhr) {
             hideTyping();
-            addMessage('Errore di connessione. Riprova più tardi.', 'bot');
+            var statusCode = xhr.status;
+            if (statusCode === 403) {
+                addMessage('Errore di sessione (403). Ricarica la pagina e riprova.', 'bot');
+            } else if (statusCode === 500) {
+                addMessage('Errore interno del server (500). Controlla i log PHP.', 'bot');
+            } else if (statusCode === 0) {
+                addMessage('Impossibile raggiungere il server. Verifica la connessione.', 'bot');
+            } else {
+                addMessage('Errore di connessione (' + statusCode + '). Riprova più tardi.', 'bot');
+            }
         })
         .always(function() {
             sendButton.prop('disabled', false);
@@ -392,9 +401,9 @@ jQuery(document).ready(function($) {
     restoreSession();
 
     // Bottoni di routing categoria — registrati dopo init() per evitare problemi di scope
-    const intentResponses = {
-        products: 'Perfetto! Dimmi cosa cerchi: un prodotto, un colore o una taglia?',
-        orders:   'Certo! Dimmi il numero ordine o cosa vorresti sapere sull\'acquisto.',
+    const intentResponses = marrisonAgent.intentResponses || {
+        products: 'Perfetto! Dimmi cosa stai cercando tra i nostri prodotti.',
+        orders:   'Certo! Dimmi il numero ordine o cosa vorresti sapere sul tuo acquisto.',
         info:     'Con piacere! Su cosa vorresti informazioni? Azienda, contatti, servizi?',
         events:   'Ottimo! Stai cercando un evento specifico o vuoi vedere il calendario?'
     };

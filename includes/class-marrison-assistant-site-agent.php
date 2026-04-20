@@ -14,6 +14,8 @@ class Marrison_Assistant_Site_Agent {
         add_action('wp_footer', array($this, 'render_chat_widget'));
         add_action('wp_ajax_marrison_site_agent_chat', array($this, 'handle_chat_request'));
         add_action('wp_ajax_nopriv_marrison_site_agent_chat', array($this, 'handle_chat_request'));
+        add_action('wp_ajax_marrison_site_agent_ping', array($this, 'handle_ping'));
+        add_action('wp_ajax_nopriv_marrison_site_agent_ping', array($this, 'handle_ping'));
     }
     
     /**
@@ -58,7 +60,13 @@ class Marrison_Assistant_Site_Agent {
                 'icon' => get_option('marrison_assistant_site_agent_icon_color', '#667eea'),
                 'header' => get_option('marrison_assistant_site_agent_header_color', '#667eea'),
                 'button' => get_option('marrison_assistant_site_agent_button_color', '#667eea'),
-            )
+            ),
+            'intentResponses' => array(
+                'products' => get_option('marrison_assistant_site_agent_response_products', 'Perfetto! Dimmi cosa stai cercando tra i nostri prodotti.'),
+                'orders'   => get_option('marrison_assistant_site_agent_response_orders',   'Certo! Dimmi il numero ordine o cosa vorresti sapere sul tuo acquisto.'),
+                'info'     => get_option('marrison_assistant_site_agent_response_info',     'Con piacere! Su cosa vorresti informazioni? Azienda, contatti, servizi?'),
+                'events'   => get_option('marrison_assistant_site_agent_response_events',   'Ottimo! Stai cercando un evento specifico o vuoi vedere il calendario?'),
+            ),
         ));
     }
     
@@ -124,6 +132,10 @@ class Marrison_Assistant_Site_Agent {
             <div class="marrison-chat-window">
                 <!-- Header -->
                 <div class="marrison-chat-header">
+                    <?php $wl_logo = Marrison_Assistant_White_Label::logo_url(); ?>
+                    <?php if ($wl_logo): ?>
+                    <img src="<?php echo esc_url($wl_logo); ?>" alt="" style="height:22px; width:auto; margin-right:8px; vertical-align:middle; flex-shrink:0;">
+                    <?php endif; ?>
                     <div class="marrison-chat-title"><?php echo esc_html($title); ?></div>
                     <div class="marrison-chat-status">
                         <span class="marrison-status-dot"></span>
@@ -188,7 +200,11 @@ class Marrison_Assistant_Site_Agent {
                 </div>
                 <!-- Footer credit -->
                 <div style="padding: 4px 0; text-align: center; background: #f8fafc; border-top: 1px solid #e2e8f0;">
-                    <a href="https://marrisonlab.com" target="_blank" rel="noopener noreferrer" style="font-size: 10px; color: #94a3b8; text-decoration: none; transition: color 0.2s;">Powered by Marrisonlab</a>
+                    <?php
+                    $pb_text = Marrison_Assistant_White_Label::powered_by_text();
+                    $pb_url  = Marrison_Assistant_White_Label::powered_by_url();
+                    ?>
+                    <a href="<?php echo esc_url($pb_url); ?>" target="_blank" rel="noopener noreferrer" style="font-size: 10px; color: #94a3b8; text-decoration: none; transition: color 0.2s;"><?php echo esc_html($pb_text); ?></a>
                 </div>
             </div>
         </div>
@@ -196,6 +212,14 @@ class Marrison_Assistant_Site_Agent {
         error_log('Marrison Assistant: Widget rendered successfully');
     }
     
+    /**
+     * Ping leggero — verifica che il canale AJAX funzioni senza chiamare Gemini
+     */
+    public function handle_ping() {
+        check_ajax_referer('marrison_agent_nonce', 'nonce');
+        wp_send_json_success(array('pong' => true, 'time' => current_time('H:i:s')));
+    }
+
     /**
      * Gestisce le richieste AJAX dal widget
      */
@@ -228,32 +252,49 @@ class Marrison_Assistant_Site_Agent {
             wp_send_json_error('Accesso negato. Effettua il login per utilizzare l\'assistente.');
         }
 
-        // Limita intento per utenti guest (no ordini)
-        if (!is_user_logged_in() && $intent === 'orders') {
-            $intent = 'general';
+        // SICUREZZA: gli ordini sono accessibili SOLO agli utenti loggati
+        if ($intent === 'orders' && !is_user_logged_in()) {
+            wp_send_json_success(array(
+                'message'        => 'Per consultare i tuoi ordini devi prima effettuare il login.',
+                'time'           => current_time('H:i'),
+                'user_logged_in' => false,
+                'intent'         => 'orders',
+            ));
         }
 
         // Processa il messaggio con Gemini passando l'intento
-        $gemini = new Marrison_Assistant_Gemini();
+        try {
+            $gemini = new Marrison_Assistant_Gemini();
 
-        if (!is_user_logged_in()) {
-            $guest_prompt = "Rispondi come assistente per visitatori del sito. Non fornire informazioni su ordini specifici o dati personali. Invita l'utente a registrarsi per servizi completi. ";
-            $response = $gemini->process_message($guest_prompt . $message, $intent, $history, $message);
-        } else {
-            $current_user = wp_get_current_user();
-            $user_context = "Utente loggato: {$current_user->display_name} (ID: {$current_user->ID}). ";
-            $response = $gemini->process_message($user_context . $message, $intent, $history, $message);
-        }
+            if (!is_user_logged_in()) {
+                $guest_prompt = "Rispondi come assistente per visitatori del sito. Non fornire informazioni su ordini specifici o dati personali. Invita l'utente a registrarsi per servizi completi. ";
+                $response = $gemini->process_message($guest_prompt . $message, $intent, $history, $message, '');
+            } else {
+                $current_user = wp_get_current_user();
+                $user_email   = $current_user->user_email;
+                $user_context = "Utente loggato: {$current_user->display_name} (email: {$user_email}). ";
+                $response = $gemini->process_message($user_context . $message, $intent, $history, $message, $user_email);
+            }
 
-        if ($response) {
-            wp_send_json_success(array(
-                'message' => $response,
-                'time' => current_time('H:i'),
-                'user_logged_in' => is_user_logged_in(),
-                'intent' => $intent
-            ));
-        } else {
-            wp_send_json_error('Errore elaborazione messaggio');
+            if ($response) {
+                wp_send_json_success(array(
+                    'message' => $response,
+                    'time' => current_time('H:i'),
+                    'user_logged_in' => is_user_logged_in(),
+                    'intent' => $intent
+                ));
+            } else {
+                error_log('Marrison Assistant: process_message returned false per intent=' . $intent . ' message=' . substr($message, 0, 80));
+                wp_send_json_success(array(
+                    'message' => 'Mi dispiace, il servizio AI non è disponibile in questo momento. Riprova tra qualche minuto.',
+                    'time' => current_time('H:i'),
+                    'user_logged_in' => is_user_logged_in(),
+                    'intent' => $intent
+                ));
+            }
+        } catch (Exception $e) {
+            error_log('Marrison Assistant: eccezione in handle_chat_request — ' . $e->getMessage());
+            wp_send_json_error('Errore interno: ' . $e->getMessage());
         }
     }
     

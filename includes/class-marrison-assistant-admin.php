@@ -24,9 +24,10 @@ class Marrison_Assistant_Admin {
      * Aggiunge la pagina menu del plugin
      */
     public function add_admin_menu() {
+        $menu_label = Marrison_Assistant_White_Label::plugin_name();
         add_menu_page(
-            'Marrison Assistant',
-            'Marrison Assistant',
+            $menu_label,
+            $menu_label,
             'manage_options',
             'marrison-assistant',
             array($this, 'main_page'),
@@ -44,14 +45,6 @@ class Marrison_Assistant_Admin {
             array($this, 'main_page')
         );
         
-        add_submenu_page(
-            'marrison-assistant',
-            'Gestione Utenti',
-            'Utenti',
-            'manage_options',
-            'marrison-assistant-users',
-            array($this, 'users_page')
-        );
     }
     
     /**
@@ -59,14 +52,6 @@ class Marrison_Assistant_Admin {
      */
     public function main_page() {
         $this->main_page->render();
-    }
-    
-    /**
-     * Pagina gestione utenti
-     */
-    public function users_page() {
-        $user_management = new Marrison_Assistant_User_Management();
-        $user_management->users_page();
     }
     
     /**

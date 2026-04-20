@@ -30,6 +30,11 @@ class Marrison_Assistant_Main_Page {
         register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_icon_color');
         register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_header_color');
         register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_button_color');
+        // Risposte ai bottoni di categoria
+        register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_response_products');
+        register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_response_orders');
+        register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_response_info');
+        register_setting('marrison_assistant_site_agent', 'marrison_assistant_site_agent_response_events');
     }
     
     /**
@@ -39,7 +44,7 @@ class Marrison_Assistant_Main_Page {
         $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general';
         ?>
         <div class="wrap marrison-assistant-wrap">
-            <h1 class="wp-heading-inline">Marrison Assistant</h1>
+            <h1 class="wp-heading-inline"><?php echo esc_html( Marrison_Assistant_White_Label::plugin_name() ); ?></h1>
             <hr class="wp-header-end">
             
             <nav class="nav-tab-wrapper">
@@ -209,6 +214,10 @@ class Marrison_Assistant_Main_Page {
                 <button type="button" id="scan-content-btn" class="button button-primary">
                     <span class="dashicons-search"></span> Scansiona Contenuti Sito
                 </button>
+                &nbsp;
+                <button type="button" id="debug-events-btn" class="button button-secondary">
+                    📅 Debug Eventi
+                </button>
                 <span id="scan-status"></span>
             </p>
             
@@ -216,6 +225,7 @@ class Marrison_Assistant_Main_Page {
                 <h4>Risultati Scansione:</h4>
                 <div id="scan-details"></div>
             </div>
+            <div id="debug-events-result" style="display:none; margin-top:10px; padding:10px; background:#f5f5f5; border:1px solid #ddd; border-radius:4px;"></div>
         </div>
         <?php
     }
@@ -336,6 +346,63 @@ class Marrison_Assistant_Main_Page {
                                    name="marrison_assistant_site_agent_placeholder" 
                                    value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_placeholder', 'Scrivi un messaggio...')); ?>" 
                                    class="regular-text">
+                        </td>
+                    </tr>
+
+                    <tr><td colspan="2"><hr><h4>Risposte ai Bottoni di Categoria</h4>
+                        <p class="description">Personalizza il messaggio che l'assistente invia dopo che l'utente clicca su una categoria. Adatta il testo al tipo di sito (es. per beauty, moda, eventi...).</p>
+                    </td></tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="marrison_assistant_site_agent_response_products">🛍️ Risposta "Prodotti"</label>
+                        </th>
+                        <td>
+                            <input type="text"
+                                   id="marrison_assistant_site_agent_response_products"
+                                   name="marrison_assistant_site_agent_response_products"
+                                   value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_response_products', 'Perfetto! Dimmi cosa stai cercando tra i nostri prodotti.')); ?>"
+                                   class="large-text">
+                            <p class="description">Es. per beauty: "Perfetto! Cerchi una crema, un siero o un profumo?"</p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="marrison_assistant_site_agent_response_orders">📦 Risposta "Ordini"</label>
+                        </th>
+                        <td>
+                            <input type="text"
+                                   id="marrison_assistant_site_agent_response_orders"
+                                   name="marrison_assistant_site_agent_response_orders"
+                                   value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_response_orders', 'Certo! Dimmi il numero ordine o cosa vorresti sapere sul tuo acquisto.')); ?>"
+                                   class="large-text">
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="marrison_assistant_site_agent_response_info">ℹ️ Risposta "Info"</label>
+                        </th>
+                        <td>
+                            <input type="text"
+                                   id="marrison_assistant_site_agent_response_info"
+                                   name="marrison_assistant_site_agent_response_info"
+                                   value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_response_info', 'Con piacere! Su cosa vorresti informazioni? Azienda, contatti, servizi?')); ?>"
+                                   class="large-text">
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="marrison_assistant_site_agent_response_events">📅 Risposta "Eventi"</label>
+                        </th>
+                        <td>
+                            <input type="text"
+                                   id="marrison_assistant_site_agent_response_events"
+                                   name="marrison_assistant_site_agent_response_events"
+                                   value="<?php echo esc_attr(get_option('marrison_assistant_site_agent_response_events', 'Ottimo! Stai cercando un evento specifico o vuoi vedere il calendario?')); ?>"
+                                   class="large-text">
                         </td>
                     </tr>
 
@@ -629,6 +696,36 @@ add_action('admin_footer', function() {
                 });
             });
             
+            // Debug eventi
+            $('#debug-events-btn').click(function(e) {
+                e.preventDefault();
+                var $btn = $(this);
+                var $result = $('#debug-events-result');
+                $btn.prop('disabled', true);
+                $result.show().html('<em>Analisi in corso...</em>');
+                $.ajax({
+                    url: ajaxurl,
+                    method: 'POST',
+                    data: {
+                        action: 'marrison_debug_events',
+                        nonce: '<?php echo wp_create_nonce('marrison_test_nonce'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $result.html(response.data);
+                        } else {
+                            $result.html('<span style="color:red;">Errore: ' + response.data + '</span>');
+                        }
+                    },
+                    error: function() {
+                        $result.html('<span style="color:red;">Errore di connessione.</span>');
+                    },
+                    complete: function() {
+                        $btn.prop('disabled', false);
+                    }
+                });
+            });
+
             // Test connessioni (quando implementate)
             $('#test-gemini-btn').click(function(e) {
                 e.preventDefault();

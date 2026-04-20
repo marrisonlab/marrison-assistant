@@ -44,6 +44,13 @@ class Marrison_Assistant_Content_Scanner {
                 $content['orders'] = $orders;
                 $this->save_content_file('orders', $orders);
             }
+
+            // Scansiona impostazioni spedizione
+            $shipping = $this->scan_shipping();
+            if (!empty($shipping)) {
+                $content['shipping'] = $shipping;
+                $this->save_content_file('shipping', $shipping);
+            }
         }
 
         // Scansiona eventi (The Events Calendar, MEC, ecc.)
@@ -203,7 +210,7 @@ class Marrison_Assistant_Content_Scanner {
      * @param  string $search_query messaggio originale dell'utente
      * @return array  array associativo [ 'products'=>[...], 'pages'=>[...], ... ]
      */
-    public function get_context_by_intent($intent, $search_query = '') {
+    public function get_context_by_intent($intent, $search_query = '', $user_email = '') {
         $keywords = $this->extract_keywords($search_query);
         $result   = array();
 
@@ -222,45 +229,53 @@ class Marrison_Assistant_Content_Scanner {
                 break;
 
             case 'orders':
-                $orders = $this->load_content_file('orders') ?? array();
-                $result['orders'] = $this->filter_items_by_keywords(
-                    $orders, $keywords, array('number', 'customer_name', 'customer_email'), 10, true
-                );
-                $products = $this->load_content_file('products');
-                if (!empty($products)) {
-                    $result['products'] = $this->filter_items_by_keywords(
-                        $products, $keywords, array('title'), 5
-                    );
+                $all_orders = $this->load_content_file('orders') ?? array();
+                // SICUREZZA: filtra SOLO gli ordini dell'utente loggato
+                if (!empty($user_email)) {
+                    $all_orders = array_values( array_filter( $all_orders, function($o) use ($user_email) {
+                        return isset($o['customer_email']) && strtolower(trim($o['customer_email'])) === strtolower(trim($user_email));
+                    }));
+                } else {
+                    // Senza email verificata non mostrare nessun ordine
+                    $all_orders = array();
                 }
+                // fallback_all=false: mai restituire ordini a caso se la keyword non matcha
+                $result['orders'] = $this->filter_items_by_keywords(
+                    $all_orders, $keywords, array('number', 'customer_name', 'customer_email'), 10, false
+                );
                 break;
 
             case 'events':
                 $events = $this->load_content_file('events') ?? array();
                 $result['events'] = $this->filter_items_by_keywords(
-                    $events, $keywords, array('title', 'content', 'excerpt'), 10
+                    $events, $keywords, array('title', 'content', 'excerpt'), 10, true
                 );
                 break;
 
             case 'info':
-                $pages = $this->load_content_file('pages');
-                $posts = $this->load_content_file('posts');
+                $pages    = $this->load_content_file('pages');
+                $posts    = $this->load_content_file('posts');
+                $shipping = $this->load_content_file('shipping') ?? array();
                 if ($pages === null && $posts === null) {
                     $legacy = get_option('marrison_assistant_site_content', array());
                     $pages  = !empty($legacy['pages']) ? $legacy['pages'] : array();
                     $posts  = !empty($legacy['posts']) ? $legacy['posts'] : array();
                 }
-                $result['pages'] = $this->filter_items_by_keywords(
+                $result['pages']    = $this->filter_items_by_keywords(
                     $pages ?? array(), $keywords, array('title', 'content'), 5
                 );
-                $result['posts'] = $this->filter_items_by_keywords(
+                $result['posts']    = $this->filter_items_by_keywords(
                     $posts ?? array(), $keywords, array('title', 'content'), 5
                 );
+                $result['shipping'] = $shipping;
                 break;
 
             default: // general
                 $pages    = $this->load_content_file('pages') ?? array();
                 $posts    = $this->load_content_file('posts') ?? array();
                 $products = $this->load_content_file('products') ?? array();
+                $events   = $this->load_content_file('events') ?? array();
+                $shipping = $this->load_content_file('shipping') ?? array();
                 if (empty($pages) && empty($posts) && empty($products)) {
                     $legacy   = get_option('marrison_assistant_site_content', array());
                     $pages    = !empty($legacy['pages'])    ? $legacy['pages']    : array();
@@ -270,6 +285,8 @@ class Marrison_Assistant_Content_Scanner {
                 $result['pages']    = $this->filter_items_by_keywords($pages,    $keywords, array('title', 'content'),      3, true);
                 $result['posts']    = $this->filter_items_by_keywords($posts,    $keywords, array('title', 'content'),      3, true);
                 $result['products'] = $this->filter_items_by_keywords($products, $keywords, array('title', 'description'), 5, true);
+                $result['events']   = $this->filter_items_by_keywords($events,   $keywords, array('title', 'excerpt'),     5, false);
+                $result['shipping'] = $shipping;
                 break;
         }
 
@@ -598,7 +615,7 @@ class Marrison_Assistant_Content_Scanner {
     }
     
     /**
-     * Scansiona gli eventi (supporta The Events Calendar, MEC, post generici con date)
+     * Scansiona gli eventi (supporta The Events Calendar, MEC, FooEvents for WooCommerce, post generici con date)
      */
     public function scan_events() {
         $events    = array();
@@ -686,6 +703,103 @@ class Marrison_Assistant_Content_Scanner {
                         'type'    => 'event',
                         'source'  => 'mec-events',
                     );
+                }
+            }
+            wp_reset_postdata();
+        }
+
+        // ── FooEvents for WooCommerce ────────────────────────────────
+        // FooEvents salva gli eventi come prodotti WooCommerce con meta WooCommerceEventsEvent != ''
+        // NON usiamo filtro data in SQL (il formato varia per versione): filtriamo in PHP con strtotime()
+        if ( class_exists('WooCommerce') ) {
+            $args = array(
+                'post_type'      => 'product',
+                'post_status'    => 'publish',
+                'posts_per_page' => 100,
+                'meta_query'     => array(
+                    array(
+                        'key'     => 'WooCommerceEventsEvent',
+                        'value'   => '',
+                        'compare' => '!=',
+                    ),
+                ),
+            );
+            $query = new WP_Query($args);
+            error_log('Marrison Assistant [FooEvents]: query trovati ' . $query->found_posts . ' prodotti evento');
+
+            if ($query->have_posts()) {
+                $yesterday_ts = strtotime('-1 day');
+                $foo_results  = array();
+
+                while ($query->have_posts()) {
+                    $query->the_post();
+                    $id       = get_the_ID();
+                    $date     = get_post_meta($id, 'WooCommerceEventsDate', true);
+                    $end_date = get_post_meta($id, 'WooCommerceEventsEndDate', true);
+                    $hour     = get_post_meta($id, 'WooCommerceEventsHour', true);
+                    $minutes  = get_post_meta($id, 'WooCommerceEventsMinutes', true);
+                    $ampm     = get_post_meta($id, 'WooCommerceEventsAmPm', true);
+                    $location = get_post_meta($id, 'WooCommerceEventsLocation', true);
+
+                    error_log('Marrison Assistant [FooEvents]: ID=' . $id . ' title="' . get_the_title() . '" date="' . $date . '"');
+
+                    // Filtra eventi passati in PHP — flessibile con qualsiasi formato data
+                    if ( !empty($date) ) {
+                        $event_ts = strtotime($date);
+                        if ( $event_ts !== false && $event_ts < $yesterday_ts ) {
+                            continue; // evento passato, salta
+                        }
+                    }
+
+                    $start = $date;
+                    if ($hour) {
+                        $start .= ' ' . $hour . ':' . str_pad($minutes ?: '0', 2, '0', STR_PAD_LEFT) . ' ' . $ampm;
+                    }
+
+                    // Prezzi: FooEvents è un prodotto WooCommerce, usa i meta standard
+                    $price         = get_post_meta($id, '_price', true);
+                    $regular_price = get_post_meta($id, '_regular_price', true);
+                    $sale_price    = get_post_meta($id, '_sale_price', true);
+                    $stock_status  = get_post_meta($id, '_stock_status', true);
+
+                    // Formatta prezzo leggibile
+                    $price_display = '';
+                    if ( $price !== '' && $price !== false ) {
+                        $price_display = number_format((float) $price, 2, ',', '.') . ' ' . get_woocommerce_currency_symbol();
+                        if ( $sale_price !== '' && $sale_price !== false && $sale_price != $regular_price ) {
+                            $price_display .= ' (scontato da ' . number_format((float) $regular_price, 2, ',', '.') . ' ' . get_woocommerce_currency_symbol() . ')';
+                        }
+                    }
+
+                    // Posti: capacità e disponibilità FooEvents
+                    $capacity      = get_post_meta($id, 'WooCommerceEventsCapacity', true);
+                    $capacity_type = get_post_meta($id, 'WooCommerceEventsCapacityType', true);
+
+                    $foo_results[] = array(
+                        'id'           => $id,
+                        'title'        => get_the_title(),
+                        'url'          => get_permalink(),
+                        'start'        => $start,
+                        'end'          => $end_date ?: '',
+                        'venue'        => $location,
+                        'excerpt'      => get_the_excerpt(),
+                        'price'        => $price_display,
+                        'stock_status' => $stock_status === 'instock' ? 'disponibile' : ( $stock_status === 'outofstock' ? 'esaurito' : $stock_status ),
+                        'capacity'     => $capacity ?: '',
+                        'type'         => 'event',
+                        'source'       => 'fooevents',
+                    );
+                }
+
+                // Ordina per data crescente
+                usort($foo_results, function($a, $b) {
+                    return strtotime($a['start'] ?: '9999-12-31') - strtotime($b['start'] ?: '9999-12-31');
+                });
+
+                if (!empty($foo_results)) {
+                    $found_any = true;
+                    $events    = array_merge($events, $foo_results);
+                    error_log('Marrison Assistant [FooEvents]: ' . count($foo_results) . ' eventi futuri aggiunti');
                 }
             }
             wp_reset_postdata();
@@ -802,11 +916,41 @@ class Marrison_Assistant_Content_Scanner {
                 if (!empty($event['venue'])) {
                     $knowledge .= "  Luogo: " . $event['venue'] . "\n";
                 }
+                if (!empty($event['price'])) {
+                    $knowledge .= "  Prezzo biglietto: " . $event['price'] . "\n";
+                }
+                if (!empty($event['stock_status'])) {
+                    $knowledge .= "  Disponibilità: " . $event['stock_status'] . "\n";
+                }
+                if (!empty($event['capacity'])) {
+                    $knowledge .= "  Capacità: " . $event['capacity'] . " posti\n";
+                }
                 if (!empty($event['excerpt'])) {
                     $knowledge .= "  Descrizione: " . $event['excerpt'] . "\n";
                 }
                 $knowledge .= "  URL: " . $event['url'] . "\n\n";
             }
+        }
+
+        // Aggiungi informazioni sulla spedizione
+        $shipping_data = $this->load_content_file('shipping');
+        if (!empty($shipping_data)) {
+            $knowledge .= "Informazioni spedizione:\n";
+            foreach ($shipping_data as $zone) {
+                $knowledge .= "- Zona: " . $zone['zone'];
+                if (!empty($zone['locations'])) {
+                    $knowledge .= " (" . implode(', ', $zone['locations']) . ")";
+                }
+                $knowledge .= "\n";
+                foreach ($zone['methods'] as $m) {
+                    $knowledge .= "  * " . $m['method'];
+                    if (!empty($m['cost']))       $knowledge .= " — Costo: " . $m['cost'];
+                    if (!empty($m['min_amount'])) $knowledge .= " — Gratuita da: " . $m['min_amount'];
+                    if (!empty($m['class_costs'])) $knowledge .= " — Classi: " . implode(', ', $m['class_costs']);
+                    $knowledge .= "\n";
+                }
+            }
+            $knowledge .= "\n";
         }
 
         return $knowledge;
@@ -845,6 +989,105 @@ class Marrison_Assistant_Content_Scanner {
     }
 
     /**
+     * Scansiona le impostazioni di spedizione WooCommerce:
+     * zone, metodi, tariffe, soglia spedizione gratuita.
+     */
+    public function scan_shipping() {
+        $shipping_data = array();
+
+        if (!class_exists('WooCommerce')) {
+            return $shipping_data;
+        }
+
+        // ── Zone di spedizione ────────────────────────────────────────
+        $zones = WC_Shipping_Zones::get_zones();
+
+        // Aggiungi anche la zona "resto del mondo" (id=0)
+        $rest_of_world = new WC_Shipping_Zone(0);
+        $zones[0] = array(
+            'zone_id'       => 0,
+            'zone_name'     => $rest_of_world->get_zone_name(),
+            'zone_order'    => 0,
+            'zone_locations'=> $rest_of_world->get_zone_locations(),
+            'shipping_methods' => $rest_of_world->get_shipping_methods(),
+        );
+
+        foreach ($zones as $zone_data) {
+            $zone_id   = $zone_data['zone_id'];
+            $zone      = new WC_Shipping_Zone($zone_id);
+            $zone_name = $zone->get_zone_name();
+
+            // Regioni coperte (paesi, stati, CAP)
+            $locations = array();
+            foreach ($zone->get_zone_locations() as $loc) {
+                $locations[] = $loc->code . ($loc->type === 'country' ? '' : ' (' . $loc->type . ')');
+            }
+
+            $methods_data = array();
+            foreach ($zone->get_shipping_methods(true) as $method) {
+                $method_title = $method->get_title();
+                $method_id    = $method->id;
+                $entry        = array(
+                    'method'      => $method_title,
+                    'method_type' => $method_id,
+                );
+
+                // Flat rate — costo
+                if ($method_id === 'flat_rate') {
+                    $cost = $method->get_option('cost');
+                    if ($cost !== '' && $cost !== null) {
+                        $entry['cost'] = $cost . ' ' . get_woocommerce_currency_symbol();
+                    }
+
+                    // Costi per classi di spedizione
+                    $classes = WC()->shipping()->get_shipping_classes();
+                    $class_costs = array();
+                    foreach ($classes as $class) {
+                        $class_cost = $method->get_option('class_cost_' . $class->term_id);
+                        if ($class_cost !== '' && $class_cost !== null) {
+                            $class_costs[] = $class->name . ': ' . $class_cost . ' ' . get_woocommerce_currency_symbol();
+                        }
+                    }
+                    if (!empty($class_costs)) {
+                        $entry['class_costs'] = $class_costs;
+                    }
+                }
+
+                // Free shipping — soglia minima
+                if ($method_id === 'free_shipping') {
+                    $requires     = $method->get_option('requires');
+                    $min_amount   = $method->get_option('min_amount');
+                    $entry['requires'] = $requires;
+                    if ($min_amount !== '' && $min_amount !== null) {
+                        $entry['min_amount'] = $min_amount . ' ' . get_woocommerce_currency_symbol();
+                    }
+                }
+
+                // Local pickup — eventuale costo
+                if ($method_id === 'local_pickup') {
+                    $cost = $method->get_option('cost');
+                    if ($cost !== '' && $cost !== null) {
+                        $entry['cost'] = $cost . ' ' . get_woocommerce_currency_symbol();
+                    }
+                }
+
+                $methods_data[] = $entry;
+            }
+
+            if (!empty($methods_data)) {
+                $shipping_data[] = array(
+                    'zone'      => $zone_name,
+                    'locations' => $locations,
+                    'methods'   => $methods_data,
+                );
+            }
+        }
+
+        error_log('Marrison Assistant [Shipping]: ' . count($shipping_data) . ' zone di spedizione scansionate');
+        return $shipping_data;
+    }
+
+    /**
      * Scansiona gli ordini WooCommerce
      */
     public function scan_orders() {
@@ -854,12 +1097,13 @@ class Marrison_Assistant_Content_Scanner {
             return $orders;
         }
 
-        // Prendi gli ultimi 100 ordini (limitato per performance)
+        // Prendi gli ultimi 100 ordini reali (esclude draft, checkout-draft, auto-draft)
         $args = array(
-            'limit' => 100,
+            'limit'   => 100,
             'orderby' => 'date',
-            'order' => 'DESC',
-            'return' => 'ids'
+            'order'   => 'DESC',
+            'return'  => 'ids',
+            'status'  => array( 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed' ),
         );
 
         $order_ids = wc_get_orders($args);
@@ -881,6 +1125,7 @@ class Marrison_Assistant_Content_Scanner {
                 'customer_email' => $order->get_billing_email(),
                 'payment_method' => $order->get_payment_method_title(),
                 'shipping_method' => $order->get_shipping_method(),
+                'view_url' => $order->get_view_order_url(),
                 'items' => array()
             );
 

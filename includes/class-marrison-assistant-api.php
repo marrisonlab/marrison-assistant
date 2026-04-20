@@ -15,6 +15,7 @@ class Marrison_Assistant_API {
         add_action('wp_ajax_marrison_debug_gemini', array($this, 'ajax_debug_gemini'));
         add_action('wp_ajax_marrison_scan_site_content', array($this, 'ajax_scan_site_content'));
         add_action('wp_ajax_marrison_reset_token_log', array($this, 'ajax_reset_token_log'));
+        add_action('wp_ajax_marrison_debug_events', array($this, 'ajax_debug_events'));
     }
     
     /**
@@ -383,5 +384,84 @@ class Marrison_Assistant_API {
         }
         update_option('marrison_assistant_token_log', array());
         wp_send_json_success('Log token azzerato.');
+    }
+
+    /**
+     * AJAX: Debug eventi — ispeziona FooEvents meta e events.json
+     */
+    public function ajax_debug_events() {
+        check_ajax_referer('marrison_test_nonce', 'nonce');
+        if (!current_user_can('manage_options')) {
+            wp_die('Non hai i permessi necessari');
+        }
+
+        ob_start();
+        echo '<h3>🔍 Debug Eventi</h3>';
+
+        // ── events.json ──────────────────────────────────────────────
+        $scanner = new Marrison_Assistant_Content_Scanner();
+        $upload_dir   = wp_upload_dir();
+        $primary_path = $upload_dir['basedir'] . '/marrison-assistant/events.json';
+        $fallback_path = MARRISON_ASSISTANT_PLUGIN_DIR . 'data/events.json';
+
+        $json_path = file_exists($primary_path) ? $primary_path : (file_exists($fallback_path) ? $fallback_path : null);
+        if ($json_path) {
+            $size   = filesize($json_path);
+            $events = json_decode(file_get_contents($json_path), true);
+            echo '<p><strong>events.json</strong>: ' . esc_html($json_path) . ' (' . $size . ' bytes, ' . count((array)$events) . ' eventi)</p>';
+            if (!empty($events)) {
+                echo '<ul>';
+                foreach ( array_slice($events, 0, 10) as $ev ) {
+                    echo '<li>' . esc_html($ev['title'] ?? '—') . ' | start: ' . esc_html($ev['start'] ?? '—') . ' | source: ' . esc_html($ev['source'] ?? '—') . '</li>';
+                }
+                echo '</ul>';
+            } else {
+                echo '<p style="color:orange;">⚠️ events.json esiste ma è vuoto. Esegui una nuova scansione.</p>';
+            }
+        } else {
+            echo '<p style="color:red;">❌ events.json non trovato. Esegui una scansione.</p>';
+        }
+
+        // ── FooEvents raw meta ────────────────────────────────────────
+        echo '<h4>Prodotti FooEvents trovati in DB</h4>';
+        if ( !class_exists('WooCommerce') ) {
+            echo '<p>WooCommerce non attivo.</p>';
+        } else {
+            $args = array(
+                'post_type'      => 'product',
+                'post_status'    => 'publish',
+                'posts_per_page' => 20,
+                'meta_query'     => array(
+                    array(
+                        'key'     => 'WooCommerceEventsEvent',
+                        'value'   => '',
+                        'compare' => '!=',
+                    ),
+                ),
+            );
+            $q = new WP_Query($args);
+            echo '<p>Prodotti con <code>WooCommerceEventsEvent != ""</code>: <strong>' . $q->found_posts . '</strong></p>';
+            if ($q->have_posts()) {
+                echo '<table style="border-collapse:collapse;width:100%;font-size:12px;">';
+                echo '<tr><th style="border:1px solid #ddd;padding:4px;">ID</th><th style="border:1px solid #ddd;padding:4px;">Titolo</th><th style="border:1px solid #ddd;padding:4px;">WCEventsEvent</th><th style="border:1px solid #ddd;padding:4px;">WCEventsDate</th><th style="border:1px solid #ddd;padding:4px;">EndDate</th></tr>';
+                while ($q->have_posts()) {
+                    $q->the_post();
+                    $id = get_the_ID();
+                    echo '<tr>';
+                    echo '<td style="border:1px solid #ddd;padding:4px;">' . $id . '</td>';
+                    echo '<td style="border:1px solid #ddd;padding:4px;">' . esc_html(get_the_title()) . '</td>';
+                    echo '<td style="border:1px solid #ddd;padding:4px;">' . esc_html(get_post_meta($id, 'WooCommerceEventsEvent', true)) . '</td>';
+                    echo '<td style="border:1px solid #ddd;padding:4px;">' . esc_html(get_post_meta($id, 'WooCommerceEventsDate', true)) . '</td>';
+                    echo '<td style="border:1px solid #ddd;padding:4px;">' . esc_html(get_post_meta($id, 'WooCommerceEventsEndDate', true)) . '</td>';
+                    echo '</tr>';
+                }
+                echo '</table>';
+                wp_reset_postdata();
+            } else {
+                echo '<p style="color:orange;">⚠️ Nessun prodotto FooEvents trovato. Verifica che il meta <code>WooCommerceEventsEvent</code> sia impostato sui prodotti-evento.</p>';
+            }
+        }
+
+        wp_send_json_success(ob_get_clean());
     }
 }

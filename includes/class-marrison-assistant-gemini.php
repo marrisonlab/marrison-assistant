@@ -184,12 +184,29 @@ class Marrison_Assistant_Gemini {
         error_log('Prompt bytes: ' . $prompt_bytes);
         error_log('Token stimati (prompt): ~' . $prompt_tokens_est);
 
+        // Sanitizza il prompt: rimuove caratteri non-UTF-8 che rompono json_encode
+        $clean_prompt = mb_convert_encoding($full_prompt, 'UTF-8', 'UTF-8');
+        $encoded_body = json_encode(array(
+            'site_url' => $site_url,
+            'prompt'   => $clean_prompt,
+        ));
+        if ($encoded_body === false) {
+            error_log('Marrison Assistant: json_encode fallito sul prompt — ' . json_last_error_msg());
+            // Secondo tentativo: rimuovi caratteri non validi con iconv
+            $safe_prompt  = iconv('UTF-8', 'UTF-8//IGNORE', $clean_prompt);
+            $encoded_body = json_encode(array(
+                'site_url' => $site_url,
+                'prompt'   => $safe_prompt !== false ? $safe_prompt : '',
+            ));
+        }
+        if ($encoded_body === false) {
+            error_log('Marrison Assistant: json_encode fallito definitivamente, impossibile chiamare Commander');
+            return false;
+        }
+
         $response = wp_remote_post($endpoint, [
             'headers' => ['Content-Type' => 'application/json'],
-            'body'    => json_encode([
-                'site_url' => $site_url,
-                'prompt'   => $full_prompt,
-            ]),
+            'body'    => $encoded_body,
             'timeout' => 60,
         ]);
 
@@ -235,14 +252,18 @@ class Marrison_Assistant_Gemini {
         }
         update_option('marrison_assistant_token_log', $log);
 
-        if ($http_code === 200 && !empty($body['message'])) {
-            return $body['message'];
+        if ($http_code === 200) {
+            if (!empty($body['message'])) {
+                return $body['message'];
+            }
+            error_log('Marrison Assistant: Commander 200 ma campo message assente. Body: ' . wp_remote_retrieve_body($response));
+            return false;
         }
 
         if ($http_code === 429) return '⚠️ Quota giornaliera esaurita. Riprova domani.';
         if ($http_code === 403) return '⚠️ Sito non autorizzato. Contatta l\'amministratore.';
 
-        error_log('Marrison Assistant: Commander HTTP ' . $http_code . ' - ' . print_r($body, true));
+        error_log('Marrison Assistant: Commander HTTP ' . $http_code . ' - body: ' . wp_remote_retrieve_body($response));
         return false;
     }
 
@@ -250,7 +271,7 @@ class Marrison_Assistant_Gemini {
      * Processa un messaggio con RAG semplificato:
      * filtra i dati lato PHP prima di chiamare Gemini, riducendo il contesto da ~3MB a <10KB.
      */
-    public function process_message($message, $intent = 'general', $history = array(), $raw_query = null) {
+    public function process_message($message, $intent = 'general', $history = array(), $raw_query = null, $user_email = '') {
 
         if (!class_exists('Marrison_Assistant_Content_Scanner')) {
             require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-marrison-assistant-content-scanner.php';
@@ -259,7 +280,7 @@ class Marrison_Assistant_Gemini {
 
         // RAG: arricchisce la query con keywords dallo storico per mantenere il contesto
         $rag_query = $this->build_rag_query($raw_query ?? $message, $history);
-        $filtered = $scanner->get_context_by_intent($intent, $rag_query);
+        $filtered = $scanner->get_context_by_intent($intent, $rag_query, $user_email);
 
         // Costruisce un contesto compatto in testo (<10KB)
         $context = $this->build_compact_context($filtered);
@@ -292,11 +313,13 @@ class Marrison_Assistant_Gemini {
             $history_text .= "---\n";
         }
 
+        $site_url = get_site_url();
+
         $full_prompt =
             $custom_prompt . "\n\n" .
             "CONTESTO (" . $hint . "):\n" . $context . "\n\n" .
             $history_text .
-            "REGOLE: rispondi in max 3 frasi, mantieni contesto storico, usa URL esatti [Nome](URL), non inventare URL.\n\n" .
+            "REGOLE: rispondi in max 3 frasi, mantieni contesto storico. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL. Se non hai un URL del contesto, non inserire alcun link.\n\n" .
             "DOMANDA: " . $message . "\n\nRispondi in italiano:";
 
         error_log('Marrison Assistant: prompt size=' . strlen($full_prompt) . ' bytes, intent=' . $intent);
@@ -305,7 +328,7 @@ class Marrison_Assistant_Gemini {
         $response = $this->call_commander($full_prompt);
 
         if ($response) {
-            return $response;
+            return $this->strip_external_links($response);
         }
 
         error_log('Marrison Assistant: Commander non disponibile');
@@ -386,9 +409,31 @@ class Marrison_Assistant_Gemini {
             $parts[] = implode("\n", $lines);
         }
 
+        // Spedizione
+        if (!empty($filtered['shipping'])) {
+            $lines = array('[SPEDIZIONE]');
+            foreach ($filtered['shipping'] as $zone) {
+                $zone_line = 'Zona: ' . $zone['zone'];
+                if (!empty($zone['locations'])) {
+                    $zone_line .= ' (' . implode(', ', $zone['locations']) . ')';
+                }
+                $lines[] = $zone_line;
+                foreach ($zone['methods'] as $m) {
+                    $method_line = '  - ' . $m['method'];
+                    if (!empty($m['cost']))       $method_line .= ' | Costo: ' . $m['cost'];
+                    if (!empty($m['min_amount'])) $method_line .= ' | Spedizione gratuita da: ' . $m['min_amount'];
+                    if (!empty($m['requires']) && $m['requires'] === 'coupon') $method_line .= ' (richiede coupon)';
+                    if (!empty($m['class_costs'])) $method_line .= ' | Classi: ' . implode(', ', $m['class_costs']);
+                    $lines[] = $method_line;
+                }
+            }
+            $parts[] = implode("\n", $lines);
+        }
+
         // Ordini
         if (!empty($filtered['orders'])) {
-            $lines = array('[ORDINI]');
+            $orders_page_url = class_exists('WooCommerce') ? wc_get_account_endpoint_url('orders') : get_site_url() . '/my-account/orders/';
+            $lines = array('[ORDINI] Pagina ordini: ' . $orders_page_url);
             foreach ($filtered['orders'] as $o) {
                 $line = 'Ordine #' . ($o['number'] ?? $o['id'] ?? '');
                 $line .= ' | Cliente: ' . ($o['customer_name'] ?? '');
@@ -401,6 +446,9 @@ class Marrison_Assistant_Gemini {
                 if (!empty($o['tracking']['number'])) {
                     $line .= ' | Tracking: ' . $o['tracking']['number'];
                 }
+                if (!empty($o['view_url'])) {
+                    $line .= ' | URL: ' . $o['view_url'];
+                }
                 $lines[] = $line;
             }
             $parts[] = implode("\n", $lines);
@@ -411,8 +459,12 @@ class Marrison_Assistant_Gemini {
             $lines = array('[EVENTI]');
             foreach ($filtered['events'] as $ev) {
                 $line = '"' . $ev['title'] . '" | URL: ' . $ev['url'];
-                if (!empty($ev['start']))   $line .= ' | Data: ' . $ev['start'];
-                if (!empty($ev['excerpt'])) $line .= ' | ' . substr(strip_tags($ev['excerpt']), 0, 150);
+                if (!empty($ev['start']))        $line .= ' | Data: ' . $ev['start'];
+                if (!empty($ev['end']))          $line .= ' | Fine: ' . $ev['end'];
+                if (!empty($ev['venue']))        $line .= ' | Luogo: ' . $ev['venue'];
+                if (!empty($ev['price']))        $line .= ' | Prezzo: ' . $ev['price'];
+                if (!empty($ev['stock_status'])) $line .= ' | ' . $ev['stock_status'];
+                if (!empty($ev['excerpt']))      $line .= ' | ' . substr(strip_tags($ev['excerpt']), 0, 120);
                 $lines[] = $line;
             }
             $parts[] = implode("\n", $lines);
@@ -421,6 +473,30 @@ class Marrison_Assistant_Gemini {
         return empty($parts) ? '[Nessun contenuto pertinente trovato nel database]' : implode("\n\n", $parts);
     }
     
+    /**
+     * Rimuove dal testo markdown tutti i link che puntano a domini esterni al sito.
+     * Sostituisce [Testo](https://altro-sito.com/...) con solo il Testo.
+     * I link interni e i link non-http (es. mailto:) vengono mantenuti.
+     */
+    private function strip_external_links($text) {
+        $site_host = parse_url(get_site_url(), PHP_URL_HOST);
+        if (!$site_host) {
+            return $text;
+        }
+        return preg_replace_callback(
+            '/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/',
+            function ($m) use ($site_host) {
+                $link_host = parse_url($m[2], PHP_URL_HOST);
+                if ($link_host === $site_host) {
+                    return $m[0]; // URL interno — mantieni
+                }
+                error_log('Marrison Assistant: rimosso link esterno "' . $m[2] . '" dalla risposta');
+                return $m[1]; // URL esterno — tieni solo il testo
+            },
+            $text
+        );
+    }
+
     /**
      * Prova un endpoint Gemini specifico
      */

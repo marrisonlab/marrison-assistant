@@ -20,6 +20,7 @@ define('MARRISON_ASSISTANT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MARRISON_ASSISTANT_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // Carica i file necessari
+require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-white-label.php';
 require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-admin.php';
 require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-api.php';
 require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-gemini.php';
@@ -46,6 +47,35 @@ class Marrison_Assistant {
         add_action('init', array($this, 'init'));
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
+
+        // White-label: sovrascrive nome e autore nella lista plugin WP (solo se configurato)
+        add_filter('all_plugins', array($this, 'apply_white_label_plugin_info'));
+    }
+
+    /**
+     * Sovrascrive le info del plugin nella lista WP admin in base a white-label.json.
+     * Versione e aggiornamenti restano invariati.
+     */
+    public function apply_white_label_plugin_info($plugins) {
+        if (!Marrison_Assistant_White_Label::is_active()) {
+            return $plugins;
+        }
+        $key = plugin_basename(__FILE__);
+        if (!isset($plugins[$key])) {
+            return $plugins;
+        }
+        $name       = Marrison_Assistant_White_Label::plugin_name();
+        $author     = Marrison_Assistant_White_Label::author();
+        $author_url = Marrison_Assistant_White_Label::author_url();
+
+        $plugins[$key]['Name']       = $name;
+        $plugins[$key]['Title']      = $name;
+        $plugins[$key]['Author']     = '<a href="' . esc_url($author_url) . '">' . esc_html($author) . '</a>';
+        $plugins[$key]['AuthorName'] = $author;
+        $plugins[$key]['AuthorURI']  = $author_url;
+        $plugins[$key]['PluginURI']  = $author_url;
+
+        return $plugins;
     }
     
     public function init() {
@@ -86,7 +116,12 @@ class Marrison_Assistant {
             // Colori personalizzabili
             'site_agent_icon_color' => '#667eea',      // Colore icona fluttuante
             'site_agent_header_color' => '#667eea',    // Colore testata chat
-            'site_agent_button_color' => '#667eea'     // Colore pulsante invio
+            'site_agent_button_color' => '#667eea',    // Colore pulsante invio
+            // Risposte ai bottoni di categoria (personalizzabili per tipo di sito)
+            'site_agent_response_products' => 'Perfetto! Dimmi cosa stai cercando tra i nostri prodotti.',
+            'site_agent_response_orders'   => 'Certo! Dimmi il numero ordine o cosa vorresti sapere sul tuo acquisto.',
+            'site_agent_response_info'     => 'Con piacere! Su cosa vorresti informazioni? Azienda, contatti, servizi?',
+            'site_agent_response_events'   => 'Ottimo! Stai cercando un evento specifico o vuoi vedere il calendario?'
         );
         
         foreach ($default_options as $option => $value) {
