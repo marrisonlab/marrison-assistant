@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Marrison Assistant
  * Plugin URI: https://github.com/marrisonlab/marrison-assistant
- * Description: Plugin WordPress per assistente AI con Google Gemini
+ * Description: Asssistente professionale AI per i tuoi clienti
  * Version: 1.0.1
  * Author: Marrisonlab
  * Author URI: https://marrisonlab.com

@@ -54,9 +54,6 @@ class Marrison_Assistant_Main_Page {
                 <a href="?page=marrison-assistant&tab=site-agent" class="nav-tab <?php echo $active_tab === 'site-agent' ? 'nav-tab-active' : ''; ?>">
                     <span class="dashicons dashicons-format-chat"></span> Agente Sito
                 </a>
-                <a href="?page=marrison-assistant&tab=analytics" class="nav-tab <?php echo $active_tab === 'analytics' ? 'nav-tab-active' : ''; ?>">
-                    <span class="dashicons dashicons-chart-bar"></span> Analytics
-                </a>
             </nav>
             
             <div class="marrison-assistant-content">
@@ -64,9 +61,6 @@ class Marrison_Assistant_Main_Page {
                 switch ($active_tab) {
                     case 'site-agent':
                         $this->render_site_agent_tab();
-                        break;
-                    case 'analytics':
-                        $this->render_analytics_tab();
                         break;
                     default:
                         $this->render_general_tab();
@@ -467,176 +461,6 @@ class Marrison_Assistant_Main_Page {
                 </div>
             </div>
         </div>
-        <?php
-    }
-    
-    /**
-     * Tab analytics — Monitoraggio consumo token Gemini
-     */
-    private function render_analytics_tab() {
-        $log = get_option('marrison_assistant_token_log', array());
-
-        // Calcola totali
-        $tot_messages   = count($log);
-        $tot_bytes      = 0;
-        $tot_est        = 0;
-        $tot_real_in    = 0;
-        $tot_real_out   = 0;
-        $tot_real_total = 0;
-        $has_real       = false;
-        foreach ($log as $entry) {
-            $tot_bytes   += (int) ($entry['prompt_bytes']       ?? 0);
-            $tot_est     += (int) ($entry['prompt_tokens_est']  ?? 0);
-            if (!is_null($entry['prompt_tokens_real'] ?? null)) {
-                $tot_real_in    += (int) $entry['prompt_tokens_real'];
-                $tot_real_out   += (int) ($entry['output_tokens']  ?? 0);
-                $tot_real_total += (int) ($entry['total_tokens']   ?? 0);
-                $has_real = true;
-            }
-        }
-
-        $intent_labels = array(
-            'products' => '🛍️ Prodotti',
-            'orders'   => '📦 Ordini',
-            'info'     => 'ℹ️ Info',
-            'events'   => '📅 Eventi',
-            'general'  => '🔍 Generale',
-        );
-        ?>
-        <div class="marrison-assistant-section">
-            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
-                <h2 style="margin:0;">📊 Monitoraggio Token Gemini</h2>
-                <button type="button" id="marrison-reset-token-log" class="button button-secondary">
-                    🗑️ Reset log
-                </button>
-            </div>
-            <p style="color:#666; margin-top:8px;">
-                Ogni riga corrisponde a un messaggio inviato al Commander. 
-                <?php if (!$has_real): ?>
-                    <em>I token reali non sono disponibili (usageMetadata non restituito dal Commander). Vengono mostrati i token stimati.</em>
-                <?php endif; ?>
-            </p>
-
-            <?php if (empty($log)): ?>
-                <p><em>Nessuna conversazione registrata. Inizia una chat per vedere i dati.</em></p>
-            <?php else: ?>
-
-            <!-- Tabella riepilogo -->
-            <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px;">
-                <div style="background:#f0f6fc; border:1px solid #b3d4f7; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
-                    <div style="font-size:24px; font-weight:700; color:#0073aa;"><?php echo $tot_messages; ?></div>
-                    <div style="font-size:12px; color:#555;">Messaggi totali</div>
-                </div>
-                <div style="background:#f0f6fc; border:1px solid #b3d4f7; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
-                    <div style="font-size:24px; font-weight:700; color:#0073aa;"><?php echo number_format($tot_est); ?></div>
-                    <div style="font-size:12px; color:#555;">Token stimati totali</div>
-                </div>
-                <?php if ($has_real): ?>
-                <div style="background:#edfaed; border:1px solid #84c484; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
-                    <div style="font-size:24px; font-weight:700; color:#2a7a2a;"><?php echo number_format($tot_real_total); ?></div>
-                    <div style="font-size:12px; color:#555;">Token reali totali</div>
-                </div>
-                <div style="background:#edfaed; border:1px solid #84c484; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
-                    <div style="font-size:24px; font-weight:700; color:#2a7a2a;"><?php echo number_format($tot_real_in); ?> / <?php echo number_format($tot_real_out); ?></div>
-                    <div style="font-size:12px; color:#555;">Token reali in / out</div>
-                </div>
-                <?php endif; ?>
-                <div style="background:#f9f0ff; border:1px solid #c9a0f7; border-radius:6px; padding:14px 20px; min-width:140px; text-align:center;">
-                    <div style="font-size:24px; font-weight:700; color:#6a0dad;"><?php echo number_format(round($tot_bytes / 1024, 1)); ?> KB</div>
-                    <div style="font-size:12px; color:#555;">Bytes prompt totali</div>
-                </div>
-            </div>
-
-            <!-- Tabella dettaglio -->
-            <div style="overflow-x:auto;">
-                <table class="widefat fixed striped" style="font-size:13px;">
-                    <thead>
-                        <tr>
-                            <th style="width:130px;">#&nbsp;Ora</th>
-                            <th style="width:110px;">Intent</th>
-                            <th style="width:90px; text-align:right;">Bytes prompt</th>
-                            <th style="width:110px; text-align:right;">Token stimati</th>
-                            <?php if ($has_real): ?>
-                            <th style="width:110px; text-align:right;">Token reali in</th>
-                            <th style="width:110px; text-align:right;">Token reali out</th>
-                            <th style="width:100px; text-align:right;">Totale reale</th>
-                            <?php endif; ?>
-                            <th style="width:80px; text-align:center;">Qualità</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    <?php
-                    $rows = array_reverse($log); // più recenti prima
-                    foreach ($rows as $i => $e) {
-                        $intent_lbl = isset($intent_labels[$e['intent']]) ? $intent_labels[$e['intent']] : esc_html($e['intent']);
-                        $est        = (int) ($e['prompt_tokens_est'] ?? 0);
-                        $real_in    = $e['prompt_tokens_real'] ?? null;
-                        $real_out   = $e['output_tokens']      ?? null;
-                        $real_tot   = $e['total_tokens']       ?? null;
-
-                        // Semaforo qualità basato su token stimati
-                        if ($est < 2000)       { $quality = '🟢'; $quality_title = 'Ottimale (<2K)'; }
-                        elseif ($est < 5000)   { $quality = '🟡'; $quality_title = 'Accettabile (2-5K)'; }
-                        else                   { $quality = '🔴'; $quality_title = 'Alto (>5K)'; }
-                        ?>
-                        <tr>
-                            <td style="font-size:11px;"><?php echo date('d/m H:i:s', (int)$e['time']); ?></td>
-                            <td><?php echo $intent_lbl; ?></td>
-                            <td style="text-align:right;"><?php echo number_format((int)($e['prompt_bytes'] ?? 0)); ?></td>
-                            <td style="text-align:right; font-weight:600;"><?php echo number_format($est); ?></td>
-                            <?php if ($has_real): ?>
-                            <td style="text-align:right;"><?php echo !is_null($real_in)  ? number_format((int)$real_in)  : '<span style="color:#aaa">—</span>'; ?></td>
-                            <td style="text-align:right;"><?php echo !is_null($real_out) ? number_format((int)$real_out) : '<span style="color:#aaa">—</span>'; ?></td>
-                            <td style="text-align:right;"><?php echo !is_null($real_tot) ? number_format((int)$real_tot) : '<span style="color:#aaa">—</span>'; ?></td>
-                            <?php endif; ?>
-                            <td style="text-align:center;" title="<?php echo esc_attr($quality_title); ?>"><?php echo $quality; ?></td>
-                        </tr>
-                        <?php
-                    }
-                    ?>
-                    </tbody>
-                    <tfoot>
-                        <tr style="background:#f0f0f0; font-weight:bold;">
-                            <td colspan="2">TOTALE (<?php echo $tot_messages; ?> msg)</td>
-                            <td style="text-align:right;"><?php echo number_format($tot_bytes); ?></td>
-                            <td style="text-align:right;"><?php echo number_format($tot_est); ?></td>
-                            <?php if ($has_real): ?>
-                            <td style="text-align:right;"><?php echo number_format($tot_real_in); ?></td>
-                            <td style="text-align:right;"><?php echo number_format($tot_real_out); ?></td>
-                            <td style="text-align:right;"><?php echo number_format($tot_real_total); ?></td>
-                            <?php endif; ?>
-                            <td></td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-            <?php endif; ?>
-        </div>
-
-        <script>
-        jQuery(document).ready(function($) {
-            $('#marrison-reset-token-log').on('click', function() {
-                if (!confirm('Azzerare il log token? I dati non saranno recuperabili.')) return;
-                var $btn = $(this).prop('disabled', true).text('Resetting…');
-                $.post(ajaxurl, {
-                    action: 'marrison_reset_token_log',
-                    nonce:  marrisonAdmin.nonce
-                })
-                .done(function(r) {
-                    if (r.success) {
-                        location.reload();
-                    } else {
-                        alert('Errore: ' + (r.data || 'sconosciuto'));
-                        $btn.prop('disabled', false).html('🗑️ Reset log');
-                    }
-                })
-                .fail(function() {
-                    alert('Errore di rete.');
-                    $btn.prop('disabled', false).html('🗑️ Reset log');
-                });
-            });
-        });
-        </script>
         <?php
     }
 }

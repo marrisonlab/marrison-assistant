@@ -16,6 +16,13 @@ class Marrison_Assistant_Content_Scanner {
     public function scan_all_content() {
         $content = array();
 
+        // Scansiona info generali sito (widget, indirizzo, contatti)
+        $site_info = $this->scan_site_info();
+        if (!empty($site_info)) {
+            $content['site_info'] = $site_info;
+            $this->save_content_file('site_info', $site_info);
+        }
+
         // Scansiona pagine
         $pages = $this->scan_pages();
         if (!empty($pages)) {
@@ -253,40 +260,45 @@ class Marrison_Assistant_Content_Scanner {
                 break;
 
             case 'info':
-                $pages    = $this->load_content_file('pages');
-                $posts    = $this->load_content_file('posts');
-                $shipping = $this->load_content_file('shipping') ?? array();
+                $pages     = $this->load_content_file('pages');
+                $posts     = $this->load_content_file('posts');
+                $shipping  = $this->load_content_file('shipping') ?? array();
+                $site_info = $this->load_content_file('site_info') ?? array();
                 if ($pages === null && $posts === null) {
                     $legacy = get_option('marrison_assistant_site_content', array());
                     $pages  = !empty($legacy['pages']) ? $legacy['pages'] : array();
                     $posts  = !empty($legacy['posts']) ? $legacy['posts'] : array();
                 }
-                $result['pages']    = $this->filter_items_by_keywords(
-                    $pages ?? array(), $keywords, array('title', 'content'), 5
+                // fallback_all=true: se la keyword non matcha esattamente, includi comunque le pagine
+                $result['pages']     = $this->filter_items_by_keywords(
+                    $pages ?? array(), $keywords, array('title', 'content', 'excerpt'), 6, true
                 );
-                $result['posts']    = $this->filter_items_by_keywords(
-                    $posts ?? array(), $keywords, array('title', 'content'), 5
+                $result['posts']     = $this->filter_items_by_keywords(
+                    $posts ?? array(), $keywords, array('title', 'content', 'excerpt'), 4, true
                 );
-                $result['shipping'] = $shipping;
+                $result['shipping']  = $shipping;
+                $result['site_info'] = $site_info;
                 break;
 
             default: // general
-                $pages    = $this->load_content_file('pages') ?? array();
-                $posts    = $this->load_content_file('posts') ?? array();
-                $products = $this->load_content_file('products') ?? array();
-                $events   = $this->load_content_file('events') ?? array();
-                $shipping = $this->load_content_file('shipping') ?? array();
+                $pages     = $this->load_content_file('pages') ?? array();
+                $posts     = $this->load_content_file('posts') ?? array();
+                $products  = $this->load_content_file('products') ?? array();
+                $events    = $this->load_content_file('events') ?? array();
+                $shipping  = $this->load_content_file('shipping') ?? array();
+                $site_info = $this->load_content_file('site_info') ?? array();
                 if (empty($pages) && empty($posts) && empty($products)) {
                     $legacy   = get_option('marrison_assistant_site_content', array());
                     $pages    = !empty($legacy['pages'])    ? $legacy['pages']    : array();
                     $posts    = !empty($legacy['posts'])    ? $legacy['posts']    : array();
                     $products = !empty($legacy['products']) ? $legacy['products'] : array();
                 }
-                $result['pages']    = $this->filter_items_by_keywords($pages,    $keywords, array('title', 'content'),      3, true);
-                $result['posts']    = $this->filter_items_by_keywords($posts,    $keywords, array('title', 'content'),      3, true);
-                $result['products'] = $this->filter_items_by_keywords($products, $keywords, array('title', 'description'), 5, true);
-                $result['events']   = $this->filter_items_by_keywords($events,   $keywords, array('title', 'excerpt'),     5, false);
-                $result['shipping'] = $shipping;
+                $result['pages']     = $this->filter_items_by_keywords($pages,    $keywords, array('title', 'content'),      3, true);
+                $result['posts']     = $this->filter_items_by_keywords($posts,    $keywords, array('title', 'content'),      3, true);
+                $result['products']  = $this->filter_items_by_keywords($products, $keywords, array('title', 'description'), 5, true);
+                $result['events']    = $this->filter_items_by_keywords($events,   $keywords, array('title', 'excerpt'),     5, false);
+                $result['shipping']  = $shipping;
+                $result['site_info'] = $site_info;
                 break;
         }
 
@@ -408,6 +420,142 @@ class Marrison_Assistant_Content_Scanner {
     }
 
     /**
+     * Estrae testo in chiaro da strutture JSON di page builder (Elementor, Gutenberg blocks, ecc.).
+     * Ricerca ricorsiva su qualsiasi chiave che contenga testo.
+     */
+    private function extract_text_from_blocks($data, $depth = 0) {
+        if ($depth > 10) return '';
+        $texts = array();
+
+        if (is_string($data)) {
+            $stripped = wp_strip_all_tags($data);
+            if (strlen(trim($stripped)) > 10) {
+                $texts[] = trim($stripped);
+            }
+            return implode(' ', $texts);
+        }
+
+        if (!is_array($data)) return '';
+
+        // Chiavi Elementor che contengono testo visibile
+        $text_keys = array('text', 'title', 'description', 'content', 'editor', 'caption',
+                           'heading', 'sub_heading', 'html', 'inner_text', 'label');
+
+        foreach ($data as $key => $value) {
+            if (in_array($key, $text_keys, true) && is_string($value)) {
+                $stripped = wp_strip_all_tags($value);
+                if (strlen(trim($stripped)) > 5) {
+                    $texts[] = trim($stripped);
+                }
+            } elseif (is_array($value)) {
+                $child = $this->extract_text_from_blocks($value, $depth + 1);
+                if (!empty($child)) {
+                    $texts[] = $child;
+                }
+            }
+        }
+
+        return implode(' ', array_filter($texts));
+    }
+
+    /**
+     * Scansiona informazioni generali del sito:
+     * opzioni WP, indirizzo negozio WooCommerce, contenuto widget footer/sidebar.
+     */
+    public function scan_site_info() {
+        $info = array();
+
+        // ── Info base WordPress ────────────────────────────────────────────
+        $info['site_name']        = get_bloginfo('name');
+        $info['site_description'] = get_bloginfo('description');
+        $info['site_url']         = get_site_url();
+        $info['admin_email']      = get_option('admin_email');
+        $info['timezone']         = get_option('timezone_string') ?: get_option('gmt_offset') . ' UTC';
+        $info['language']         = get_bloginfo('language');
+
+        // ── Indirizzo negozio WooCommerce ──────────────────────────────────
+        if (class_exists('WooCommerce')) {
+            $store_address  = get_option('woocommerce_store_address', '');
+            $store_address2 = get_option('woocommerce_store_address_2', '');
+            $store_city     = get_option('woocommerce_store_city', '');
+            $store_postcode = get_option('woocommerce_store_postcode', '');
+            $store_country  = get_option('woocommerce_default_country', '');
+
+            $full_address = implode(', ', array_filter(array(
+                $store_address,
+                $store_address2,
+                $store_postcode . ' ' . $store_city,
+                $store_country,
+            )));
+            if (!empty($full_address)) {
+                $info['store_address'] = trim($full_address);
+            }
+
+            // Valuta e prezzi
+            $info['currency']       = get_woocommerce_currency();
+            $info['currency_symbol'] = get_woocommerce_currency_symbol();
+        }
+
+        // ── Contenuto widget registrati (footer, sidebar, ecc.) ────────────
+        $all_widgets    = get_option('sidebars_widgets', array());
+        $widget_texts   = array();
+
+        foreach ($all_widgets as $sidebar_id => $widget_ids) {
+            if ($sidebar_id === 'wp_inactive_widgets' || !is_array($widget_ids)) continue;
+
+            foreach ($widget_ids as $widget_id) {
+                // Text widget
+                if (strpos($widget_id, 'text-') === 0) {
+                    $idx = (int) str_replace('text-', '', $widget_id);
+                    $text_widgets = get_option('widget_text', array());
+                    if (!empty($text_widgets[$idx]['text'])) {
+                        $text = wp_strip_all_tags($text_widgets[$idx]['text']);
+                        if (!empty(trim($text))) {
+                            $widget_texts[] = '[Widget ' . $sidebar_id . '] ' . trim($text);
+                        }
+                    }
+                }
+
+                // HTML widget (block widget editor)
+                if (strpos($widget_id, 'block-') === 0) {
+                    $idx = (int) str_replace('block-', '', $widget_id);
+                    $block_widgets = get_option('widget_block', array());
+                    if (!empty($block_widgets[$idx]['content'])) {
+                        $text = wp_strip_all_tags(
+                            apply_filters('the_content', $block_widgets[$idx]['content'])
+                        );
+                        if (!empty(trim($text))) {
+                            $widget_texts[] = '[Widget ' . $sidebar_id . '] ' . trim($text);
+                        }
+                    }
+                }
+
+                // Custom HTML widget
+                if (strpos($widget_id, 'custom_html-') === 0) {
+                    $idx = (int) str_replace('custom_html-', '', $widget_id);
+                    $html_widgets = get_option('widget_custom_html', array());
+                    if (!empty($html_widgets[$idx]['content'])) {
+                        $text = wp_strip_all_tags($html_widgets[$idx]['content']);
+                        if (!empty(trim($text))) {
+                            $widget_texts[] = '[Widget ' . $sidebar_id . '] ' . trim($text);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!empty($widget_texts)) {
+            $info['widgets'] = $widget_texts;
+        }
+
+        // ── Pagina Contatti rilevata da titolo ─────────────────────────────
+        // (già scansionata in scan_pages, qui solo segnaposto per chiarezza)
+
+        error_log('Marrison Assistant [SiteInfo]: info sito scansionate');
+        return $info;
+    }
+
+    /**
      * Scansiona le pagine
      */
     public function scan_pages() {
@@ -427,10 +575,42 @@ class Marrison_Assistant_Content_Scanner {
             while ($query->have_posts()) {
                 $query->the_post();
                 
+                // Applica the_content per espandere shortcode, page builder (Elementor, Divi, ecc.)
+                $raw_content = apply_filters('the_content', get_the_content());
+                // Fallback su post_content grezzo se il filtro non produce output
+                if (empty(trim(strip_tags($raw_content)))) {
+                    $raw_content = get_the_content();
+                }
+                $plain_content = wp_strip_all_tags($raw_content);
+
+                // Fallback Elementor: estrai testo da _elementor_data JSON
+                if (strlen(trim($plain_content)) < 50) {
+                    $el_data = get_post_meta(get_the_ID(), '_elementor_data', true);
+                    if (!empty($el_data)) {
+                        $decoded = json_decode($el_data, true);
+                        if (is_array($decoded)) {
+                            $plain_content = $this->extract_text_from_blocks($decoded);
+                        }
+                    }
+                }
+
+                // Fallback generico: cerca in qualsiasi meta che contenga testo lungo
+                if (strlen(trim($plain_content)) < 50) {
+                    $all_meta = get_post_meta(get_the_ID());
+                    foreach ($all_meta as $meta_key => $meta_values) {
+                        if (strpos($meta_key, '_') === 0) continue; // salta meta privati
+                        foreach ($meta_values as $mv) {
+                            if (is_string($mv) && strlen($mv) > 100 && strip_tags($mv) === $mv) {
+                                $plain_content .= ' ' . $mv;
+                            }
+                        }
+                    }
+                }
+
                 $page_data = array(
                     'id' => get_the_ID(),
                     'title' => get_the_title(),
-                    'content' => wp_strip_all_tags(get_the_content()),
+                    'content' => trim($plain_content),
                     'excerpt' => get_the_excerpt(),
                     'url' => get_permalink(),
                     'type' => 'page'
@@ -465,10 +645,24 @@ class Marrison_Assistant_Content_Scanner {
             while ($query->have_posts()) {
                 $query->the_post();
                 
+                $raw_content = apply_filters('the_content', get_the_content());
+                if (empty(trim(strip_tags($raw_content)))) {
+                    $raw_content = get_the_content();
+                }
+                $plain_post = wp_strip_all_tags($raw_content);
+                if (strlen(trim($plain_post)) < 50) {
+                    $el_data = get_post_meta(get_the_ID(), '_elementor_data', true);
+                    if (!empty($el_data)) {
+                        $decoded = json_decode($el_data, true);
+                        if (is_array($decoded)) {
+                            $plain_post = $this->extract_text_from_blocks($decoded);
+                        }
+                    }
+                }
                 $post_data = array(
                     'id' => get_the_ID(),
                     'title' => get_the_title(),
-                    'content' => wp_strip_all_tags(get_the_content()),
+                    'content' => trim($plain_post),
                     'excerpt' => get_the_excerpt(),
                     'url' => get_permalink(),
                     'date' => get_the_date('Y-m-d'),

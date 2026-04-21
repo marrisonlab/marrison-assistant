@@ -236,9 +236,9 @@ class Marrison_Assistant_Gemini {
         }
 
         // Salva nel log token per la tab Analytics
-        $log = get_option('marrison_assistant_token_log', array());
-        $log[] = array(
+        $log_entry = array(
             'time'              => time(),
+            'timestamp'         => current_time('mysql'),
             'intent'            => $this->current_intent,
             'prompt_bytes'      => $prompt_bytes,
             'prompt_tokens_est' => $prompt_tokens_est,
@@ -246,11 +246,17 @@ class Marrison_Assistant_Gemini {
             'output_tokens'     => $real_output,
             'total_tokens'      => $real_total,
         );
+
+        $log = get_option('marrison_assistant_token_log', array());
+        $log[] = $log_entry;
         // Mantieni solo gli ultimi 200 record
         if (count($log) > 200) {
             $log = array_slice($log, -200);
         }
         update_option('marrison_assistant_token_log', $log);
+
+        // Invia log al Commander (asincrono, non bloccante)
+        $this->send_token_log_to_commander($log_entry);
 
         if ($http_code === 200) {
             if (!empty($body['message'])) {
@@ -389,11 +395,31 @@ class Marrison_Assistant_Gemini {
             $parts[] = implode("\n", $lines);
         }
 
+        // Info sito (indirizzo, widget footer, ecc.)
+        if (!empty($filtered['site_info'])) {
+            $si    = $filtered['site_info'];
+            $lines = array('[INFO SITO]');
+            if (!empty($si['site_name']))     $lines[] = 'Nome: ' . $si['site_name'];
+            if (!empty($si['site_description'])) $lines[] = 'Descrizione: ' . $si['site_description'];
+            if (!empty($si['store_address'])) $lines[] = 'Indirizzo negozio: ' . $si['store_address'];
+            if (!empty($si['admin_email']))   $lines[] = 'Email contatto: ' . $si['admin_email'];
+            if (!empty($si['widgets'])) {
+                foreach ($si['widgets'] as $w) {
+                    $lines[] = 'Info aggiuntiva: ' . substr($w, 0, 300);
+                }
+            }
+            if (count($lines) > 1) {
+                $parts[] = implode("\n", $lines);
+            }
+        }
+
         // Pagine
         if (!empty($filtered['pages'])) {
             $lines = array('[PAGINE]');
             foreach ($filtered['pages'] as $pg) {
-                $snippet = substr(strip_tags($pg['content'] ?? ''), 0, 200);
+                $text    = strip_tags($pg['content'] ?? '');
+                $excerpt = strip_tags($pg['excerpt'] ?? '');
+                $snippet = !empty($text) ? substr($text, 0, 400) : substr($excerpt, 0, 400);
                 $lines[] = '"' . $pg['title'] . '" | URL: ' . $pg['url'] . ' | ' . $snippet;
             }
             $parts[] = implode("\n", $lines);
@@ -403,7 +429,9 @@ class Marrison_Assistant_Gemini {
         if (!empty($filtered['posts'])) {
             $lines = array('[ARTICOLI]');
             foreach ($filtered['posts'] as $po) {
-                $snippet = substr(strip_tags($po['content'] ?? ''), 0, 200);
+                $text    = strip_tags($po['content'] ?? '');
+                $excerpt = strip_tags($po['excerpt'] ?? '');
+                $snippet = !empty($text) ? substr($text, 0, 400) : substr($excerpt, 0, 400);
                 $lines[] = '"' . $po['title'] . '" | URL: ' . $po['url'] . ' | ' . $snippet;
             }
             $parts[] = implode("\n", $lines);
@@ -591,5 +619,41 @@ class Marrison_Assistant_Gemini {
         $complete_prompt .= "Rispondi in modo utile e professionale basandoti sulle informazioni fornite. Se non trovi informazioni rilevanti nei contenuti del sito, rispondi in modo generale ma utile.";
         
         return $complete_prompt;
+    }
+
+    /**
+     * Invia il log token al Commander per analytics centralizzate.
+     * Operazione asincrona (non blocca la risposta all'utente).
+     */
+    private function send_token_log_to_commander($log_entry) {
+        $commander_url = get_option('marrison_assistant_commander_url', '');
+        if (empty($commander_url)) {
+            return; // Nessun commander configurato
+        }
+
+        $endpoint = trailingslashit($commander_url) . 'wp-json/marrison-commander/v1/log-token';
+        $site_url = get_site_url();
+
+        // Prepara i dati da inviare
+        $payload = array(
+            'site_url'  => $site_url,
+            'log_data'  => $log_entry,
+        );
+
+        // Invio non bloccante usando wp_remote_post con timeout breve
+        $response = wp_remote_post($endpoint, array(
+            'headers' => array('Content-Type' => 'application/json'),
+            'body'    => json_encode($payload),
+            'timeout' => 5, // Timeout breve per non rallentare
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('Marrison Assistant: Errore invio log al Commander - ' . $response->get_error_message());
+        } else {
+            $http_code = wp_remote_retrieve_response_code($response);
+            if ($http_code !== 200) {
+                error_log('Marrison Assistant: Commander ha risposto HTTP ' . $http_code . ' per log-token');
+            }
+        }
     }
 }

@@ -165,17 +165,20 @@ class Marrison_Assistant_Site_Agent {
                     $scanner      = new Marrison_Assistant_Content_Scanner();
                     $show_products = $scanner->has_content('products') || class_exists('WooCommerce');
                     $show_events   = $scanner->has_content('events');
-                    $show_orders   = is_user_logged_in();
-                    // Info: sempre visibile (pagine/post sempre presenti)
+                    $show_orders   = is_user_logged_in() && class_exists('WooCommerce');
+                    // Mostra i pulsanti solo se ce ne sono almeno due (altrimenti è un passaggio inutile)
+                    $show_buttons  = ($show_products || $show_orders || $show_events);
                     ?>
+                    <?php if ($show_buttons): ?>
                     <div id="marrison-intent-buttons" class="marrison-intent-buttons">
                         <?php if ($show_products): ?><button type="button" class="marrison-intent-btn" data-intent="products">🛍️ Prodotti</button><?php endif; ?>
                         <?php if ($show_orders):   ?><button type="button" class="marrison-intent-btn" data-intent="orders">📦 Ordini</button><?php endif; ?>
                         <button type="button" class="marrison-intent-btn" data-intent="info">ℹ️ Info</button>
                         <?php if ($show_events):   ?><button type="button" class="marrison-intent-btn" data-intent="events">📅 Eventi</button><?php endif; ?>
                     </div>
+                    <?php endif; ?>
 
-                    <?php if (!is_user_logged_in() && !$logged_only): ?>
+                    <?php if (!is_user_logged_in() && !$logged_only && class_exists('WooCommerce')): ?>
                     <div class="marrison-message marrison-bot">
                         <div class="marrison-message-content marrison-tip-message">
                             <strong>Tip:</strong> Effettua il login per accedere a funzionalità avanzate come tracking ordini e supporto personalizzato.
