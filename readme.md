@@ -2,8 +2,29 @@
 
 Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
-**Versione:** 1.0.1  
+**Versione:** 1.0.2  
 **Autore:** [Marrisonlab](https://marrisonlab.com)
+
+## 📝 Changelog
+
+### v1.0.2 (2025-04-21)
+- **Migliorato:** Scansione contenuti con supporto Elementor e fallback meta
+- **Migliorato:** Intent "info" ora include sempre le pagine del sito (fallback_all)
+- **Migliorato:** Aumentato snippet contesto pagine da 200 a 400 caratteri
+- **Fix:** Pulsanti routing nascosti quando c'è solo "Info" (no ecommerce)
+- **Fix:** Messaggio tip login nascosto su siti senza WooCommerce
+- **Fix:** Pulsante "Ordini" visibile solo con WooCommerce attivo
+- **Nuovo:** Dashboard Commander con filtri per sito nei contatori
+- **Nuovo:** Pulsante Reset log con conferma modale in Commander
+- **Nuovo:** Supporto white-label tramite `white-label.json`
+
+### v1.0.1 (2025-04)
+- Fix token analytics dashboard filtering
+- Migrazione log token su Commander
+- Aggiunto calcolo costi API Gemini
+
+### v1.0.0 (2025-04)
+- Release iniziale
 
 ## 🎯 Funzionalità
 

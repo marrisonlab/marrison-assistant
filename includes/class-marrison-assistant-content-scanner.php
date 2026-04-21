@@ -548,10 +548,123 @@ class Marrison_Assistant_Content_Scanner {
             $info['widgets'] = $widget_texts;
         }
 
-        // ── Pagina Contatti rilevata da titolo ─────────────────────────────
-        // (già scansionata in scan_pages, qui solo segnaposto per chiarezza)
+        // ── Dati di contatto estratti dalle pagine ─────────────────────────
+        $contact_keywords = array('contatt', 'contact', 'chi siamo', 'about', 'dove siamo', 'recapiti', 'info');
+        $contact_query = new WP_Query(array(
+            'post_type'      => 'page',
+            'post_status'    => 'publish',
+            'posts_per_page' => -1,
+        ));
+        $phones  = array();
+        $emails  = array();
+        $contact_snippets = array();
 
-        error_log('Marrison Assistant [SiteInfo]: info sito scansionate');
+        if ($contact_query->have_posts()) {
+            while ($contact_query->have_posts()) {
+                $contact_query->the_post();
+                $title_lower = strtolower(get_the_title());
+                $is_contact_page = false;
+                foreach ($contact_keywords as $kw) {
+                    if (strpos($title_lower, $kw) !== false) {
+                        $is_contact_page = true;
+                        break;
+                    }
+                }
+
+                // Estrai sempre da tutte le pagine per telefono/email
+                $raw = apply_filters('the_content', get_the_content());
+                if (empty(trim(strip_tags($raw)))) {
+                    $raw = get_the_content();
+                }
+
+                // Estrai tel: dagli href PRIMA di strippare i tag (es. <a href="tel:+39...">)
+                $tel_from_href = array();
+                if (preg_match_all('/href=["\']tel:([^"\']+)["\']/', $raw, $hm)) {
+                    foreach ($hm[1] as $t) {
+                        $t = preg_replace('/[^\d\+]/', '', $t);
+                        if (strlen($t) >= 6) $tel_from_href[] = $t;
+                    }
+                }
+                // Estrai mailto: dagli href
+                $mail_from_href = array();
+                if (preg_match_all('/href=["\']mailto:([^"\']+)["\']/', $raw, $mm)) {
+                    foreach ($mm[1] as $e) {
+                        $mail_from_href[] = trim($e);
+                    }
+                }
+
+                $plain = wp_strip_all_tags($raw);
+
+                // Elementor fallback: usa SEMPRE _elementor_data e combina con il plain text
+                $el = get_post_meta(get_the_ID(), '_elementor_data', true);
+                if (!empty($el)) {
+                    $dec = json_decode($el, true);
+                    if (is_array($dec)) {
+                        $el_text = $this->extract_text_from_blocks($dec);
+                        // Cerca anche href tel: nel JSON grezzo
+                        if (preg_match_all('/"url"\s*:\s*"tel:([^"]+)"/', $el, $jm)) {
+                            foreach ($jm[1] as $t) {
+                                $t = preg_replace('/[^\d\+]/', '', $t);
+                                if (strlen($t) >= 6) $tel_from_href[] = $t;
+                            }
+                        }
+                        if (preg_match_all('/"url"\s*:\s*"mailto:([^"]+)"/', $el, $jm)) {
+                            foreach ($jm[1] as $e) {
+                                $mail_from_href[] = trim($e);
+                            }
+                        }
+                        if (strlen(trim($plain)) < 50) {
+                            $plain = $el_text;
+                        } else {
+                            $plain .= ' ' . $el_text;
+                        }
+                    }
+                }
+
+                // Aggiungi numeri da href
+                foreach ($tel_from_href as $t) $phones[] = $t;
+                foreach ($mail_from_href as $e) $emails[] = $e;
+
+                error_log('Marrison [ContactScan] page="' . get_the_title() . '" plain_len=' . strlen($plain)
+                    . ' tel_href=' . count($tel_from_href) . ' mail_href=' . count($mail_from_href));
+
+                // Regex numeri di telefono nel testo plain
+                if (preg_match_all('/(?:\+39[\s\-]?)?(?:0\d{1,4}[\s\-]?)?\d{6,10}/', $plain, $m)) {
+                    foreach ($m[0] as $phone) {
+                        $clean = trim(preg_replace('/\s+/', ' ', $phone));
+                        if (strlen(preg_replace('/\D/', '', $clean)) >= 6) {
+                            $phones[] = $clean;
+                        }
+                    }
+                }
+
+                // Regex email nel testo plain
+                if (preg_match_all('/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/', $plain, $m)) {
+                    foreach ($m[0] as $email) {
+                        $emails[] = $email;
+                    }
+                }
+
+                // Snippet completo per pagine contatto
+                if ($is_contact_page && !empty(trim($plain))) {
+                    $contact_snippets[] = '"' . get_the_title() . '": ' . substr($plain, 0, 800);
+                    error_log('Marrison [ContactScan] contact_snippet_saved for "' . get_the_title() . '"');
+                }
+            }
+        }
+        wp_reset_postdata();
+
+        if (!empty($phones)) {
+            $info['phones'] = array_unique($phones);
+        }
+        if (!empty($emails)) {
+            $info['emails'] = array_values(array_unique($emails));
+        }
+        if (!empty($contact_snippets)) {
+            $info['contact_pages'] = $contact_snippets;
+        }
+
+        error_log('Marrison Assistant [SiteInfo]: info sito scansionate, tel=' . count($phones) . ' email=' . count($emails));
         return $info;
     }
 

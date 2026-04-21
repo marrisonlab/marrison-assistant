@@ -325,7 +325,11 @@ class Marrison_Assistant_Gemini {
             $custom_prompt . "\n\n" .
             "CONTESTO (" . $hint . "):\n" . $context . "\n\n" .
             $history_text .
-            "REGOLE: rispondi in max 3 frasi, mantieni contesto storico. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL. Se non hai un URL del contesto, non inserire alcun link.\n\n" .
+            "REGOLE ASSOLUTE:\n" .
+            "1. Rispondi SOLO con informazioni presenti nel CONTESTO sopra. NON inventare, NON dedurre, NON aggiungere dettagli non presenti.\n" .
+            "2. Se l'informazione richiesta NON è nel CONTESTO, rispondi esattamente: \"Non ho questa informazione. Ti consiglio di visitare il sito o la pagina Contatti per maggiori dettagli.\"\n" .
+            "3. Rispondi in max 3 frasi dirette.\n" .
+            "4. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL.\n\n" .
             "DOMANDA: " . $message . "\n\nRispondi in italiano:";
 
         error_log('Marrison Assistant: prompt size=' . strlen($full_prompt) . ' bytes, intent=' . $intent);
@@ -399,13 +403,24 @@ class Marrison_Assistant_Gemini {
         if (!empty($filtered['site_info'])) {
             $si    = $filtered['site_info'];
             $lines = array('[INFO SITO]');
-            if (!empty($si['site_name']))     $lines[] = 'Nome: ' . $si['site_name'];
+            if (!empty($si['site_name']))        $lines[] = 'Nome sito: ' . $si['site_name'];
             if (!empty($si['site_description'])) $lines[] = 'Descrizione: ' . $si['site_description'];
-            if (!empty($si['store_address'])) $lines[] = 'Indirizzo negozio: ' . $si['store_address'];
-            if (!empty($si['admin_email']))   $lines[] = 'Email contatto: ' . $si['admin_email'];
+            if (!empty($si['store_address']))    $lines[] = 'Indirizzo: ' . $si['store_address'];
+            if (!empty($si['admin_email']))      $lines[] = 'Email admin: ' . $si['admin_email'];
+            if (!empty($si['phones'])) {
+                $lines[] = 'Telefono: ' . implode(' / ', array_slice($si['phones'], 0, 5));
+            }
+            if (!empty($si['emails'])) {
+                $lines[] = 'Email: ' . implode(', ', array_slice($si['emails'], 0, 5));
+            }
+            if (!empty($si['contact_pages'])) {
+                foreach ($si['contact_pages'] as $cp) {
+                    $lines[] = '[Pagina contatti] ' . $cp;
+                }
+            }
             if (!empty($si['widgets'])) {
                 foreach ($si['widgets'] as $w) {
-                    $lines[] = 'Info aggiuntiva: ' . substr($w, 0, 300);
+                    $lines[] = 'Widget: ' . substr($w, 0, 300);
                 }
             }
             if (count($lines) > 1) {
