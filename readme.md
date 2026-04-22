@@ -2,10 +2,24 @@
 
 Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
-**Versione:** 1.2.1  
+**Versione:** 1.2.4  
 **Autore:** [Marrisonlab](https://marrisonlab.com)
 
 ## 📝 Changelog
+
+### v1.2.4 (2025-04-22)
+- **Fix:** Debug avanzato per tracciare flusso aggiornamenti
+- **Fix:** Hook package options per identificare problemi download
+- **Fix:** Logging completo per verificare dove il download URL diventa nullo
+
+### v1.2.3 (2025-04-22)
+- **Fix:** Download URL nullo - errore aggiornamento ZipArchive filename vuoto
+- **Fix:** Sistema gerarchico URL con priorità zipball_url > assets.zip > URL costruito
+- **Fix:** Logging migliorato e validazione assets per release GitHub
+
+### v1.2.2 (2025-04-22)
+- **Nuovo:** Link cliccabili telefono e WhatsApp con styling differenziato
+- **Fix:** Caricamento multiplo plugin con controllo globale
 
 ### v1.2.1 (2025-04-22)
 - **Fix:** Risolto problema aggiornamenti GitHub con cartelle a nome casuale

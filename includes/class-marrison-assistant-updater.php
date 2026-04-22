@@ -19,13 +19,17 @@ class Marrison_Assistant_Updater {
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
         add_filter('plugins_api', [$this, 'plugin_info'], 20, 3);
         add_action('upgrader_pre_download', [$this, 'perform_plugin_update'], 10, 2);
+        add_filter('upgrader_package_options', [$this, 'debug_package_options'], 10, 3);
     }
 
     /**
      * Controlla aggiornamenti da GitHub (chiamato quando WP fa il suo check naturale)
      */
     public function check_update($transient) {
+        error_log('Marrison Assistant: check_update called');
+        
         if (empty($transient->checked)) {
+            error_log('Marrison Assistant: transient checked is empty');
             return $transient;
         }
 
@@ -33,13 +37,17 @@ class Marrison_Assistant_Updater {
         $remote_version = $this->get_remote_version();
         
         if (!$remote_version) {
+            error_log('Marrison Assistant: failed to get remote version');
             return $transient;
         }
 
         $current_version = MARRISON_ASSISTANT_VERSION;
+        error_log('Marrison Assistant: current version ' . $current_version . ', remote version ' . $remote_version['version']);
 
         // Confronta versioni
         if (version_compare($current_version, $remote_version['version'], '<')) {
+            error_log('Marrison Assistant: update available, preparing plugin data');
+            
             $plugin_data = new stdClass();
             $plugin_data->slug = $this->plugin_slug;
             $plugin_data->plugin = $this->plugin_file;
@@ -52,7 +60,13 @@ class Marrison_Assistant_Updater {
             $plugin_data->tested = '6.4';
             $plugin_data->requires_php = '7.4';
 
+            error_log('Marrison Assistant: package URL set to: ' . $remote_version['download_url']);
+            
             $transient->response[$this->plugin_file] = $plugin_data;
+            
+            error_log('Marrison Assistant: plugin data added to transient response');
+        } else {
+            error_log('Marrison Assistant: no update needed');
         }
 
         return $transient;
@@ -252,6 +266,22 @@ class Marrison_Assistant_Updater {
         $html = preg_replace('/^[-*]\s+(.+)$/m', '• $1', $html);
 
         return $html;
+    }
+
+    /**
+     * Debug delle opzioni del package durante l'aggiornamento
+     */
+    public function debug_package_options($options, $package, $upgrader) {
+        error_log('Marrison Assistant: debug_package_options called');
+        error_log('Marrison Assistant: package = ' . var_export($package, true));
+        error_log('Marrison Assistant: options = ' . var_export($options, true));
+        
+        // Se il package è nullo o vuoto, questo è il nostro problema
+        if (empty($package)) {
+            error_log('Marrison Assistant: CRITICAL - Package is empty/null!');
+        }
+        
+        return $options;
     }
 }
 
