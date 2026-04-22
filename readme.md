@@ -2,10 +2,25 @@
 
 Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
-**Versione:** 1.2.4  
+**Versione:** 1.3.0  
 **Autore:** [Marrisonlab](https://marrisonlab.com)
 
 ## 📝 Changelog
+
+### v1.3.0 (2025-04-22) - Major Release
+- **Nuovo:** Supporto completo Custom Post Types (CPT) e Custom Taxonomies (CCT)
+- **Nuovo:** Estrazione automatica meta campi e featured images per CPT
+- **Nuovo:** Contesto CPT integrato nelle ricerche generali dell'AI
+- **Nuovo:** Link cliccabili telefono e WhatsApp con styling differenziato
+- **Nuovo:** Risposte mirate per contatti - numeri telefono e email diretti
+- **Nuovo:** Sistema debug avanzato per tracciare flusso aggiornamenti
+- **Nuovo:** Fix automatico cartelle GitHub con nomi casuali
+- **Nuovo:** Controllo globale anti-caricamento multiplo
+- **Migliorato:** Keyword extraction accetta numeri (es. taglie "45")
+- **Migliorato:** Link prodotti sempre inclusi con [Nome](URL)
+- **Migliorato:** Inviti registrazione solo su siti con WooCommerce
+- **Fix:** Risposte mirate contatti e link target behavior
+- **Fix:** Processo aggiornamenti GitHub e download URL issues
 
 ### v1.2.4 (2025-04-22)
 - **Fix:** Debug avanzato per tracciare flusso aggiornamenti

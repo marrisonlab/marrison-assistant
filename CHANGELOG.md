@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-04-22
+
+### Major Release - Complete Feature Set
+
+### Added
+- **Custom Post Types (CPT) Support**: Scansione completa di tutti i CPT pubblici
+- **Custom Taxonomies (CCT) Support**: Include categorie e tag personalizzati
+- **Meta & Featured Images**: Estrazione automatica campi personalizzati e immagini in evidenza
+- **CPT Context Integration**: I CPT sono inclusi nelle ricerche generali dell'AI
+- **Clickable Phone Links**: Numeri telefono automaticamente convertiti in link `tel:+39XXXXX`
+- **WhatsApp Integration**: Pulsante WhatsApp accanto ai numeri di telefono
+- **Smart Contact Responses**: Regola specifica per fornire direttamente contatti quando disponibili
+- **Advanced Debug System**: Logging completo per tracciare flusso aggiornamenti
+- **GitHub Update Fix**: Sistema automatico per rinominare cartelle GitHub con nomi casuali
+- **Anti-Duplicate Loading**: Controllo globale per prevenire conflitti tra copie del plugin
+
+### Improved
+- **Keyword Extraction**: Accetta numeri (es. taglie "45") di 2+ caratteri
+- **Product Links**: Sempre inclusi con [Nome](URL) nelle risposte
+- **Registration Prompts**: Mostrati solo su siti con WooCommerce
+- **Update URL Priority**: Sistema gerarchico zipball_url > assets.zip > URL costruito
+
+### Fixed
+- **Targeted Contact Responses**: L'AI ora risponde correttamente a domande su contatti
+- **Link Target Behavior**: Rimossi target="_blank" - link aprono nella stessa finestra
+- **GitHub Update Process**: Risolto problema cartelle con nomi casuali durante aggiornamento
+- **Download URL Issues**: Fix per ZipArchive filename vuoto
+- **Plugin Loading**: Prevenzione caricamento multiplo con controllo globale
+
 ## [1.2.4] - 2025-04-22
 
 ### Added
