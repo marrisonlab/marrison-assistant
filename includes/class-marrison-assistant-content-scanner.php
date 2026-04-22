@@ -67,6 +67,13 @@ class Marrison_Assistant_Content_Scanner {
             $this->save_content_file('events', $events);
         }
 
+        // Scansiona Custom Post Types (CPT) pubblici
+        $custom_posts = $this->scan_custom_post_types();
+        if (!empty($custom_posts)) {
+            $content['custom_posts'] = $custom_posts;
+            $this->save_content_file('custom_posts', $custom_posts);
+        }
+
         // Salva timestamp ultima scansione
         update_option('marrison_assistant_last_content_scan', time());
 
@@ -323,12 +330,13 @@ class Marrison_Assistant_Content_Scanner {
                 break;
 
             default: // general
-                $pages     = $this->load_content_file('pages') ?? array();
-                $posts     = $this->load_content_file('posts') ?? array();
-                $products  = $this->load_content_file('products') ?? array();
-                $events    = $this->load_content_file('events') ?? array();
-                $shipping  = $this->load_content_file('shipping') ?? array();
-                $site_info = $this->load_content_file('site_info') ?? array();
+                $pages       = $this->load_content_file('pages') ?? array();
+                $posts       = $this->load_content_file('posts') ?? array();
+                $products    = $this->load_content_file('products') ?? array();
+                $events      = $this->load_content_file('events') ?? array();
+                $custom_posts = $this->load_content_file('custom_posts') ?? array();
+                $shipping    = $this->load_content_file('shipping') ?? array();
+                $site_info   = $this->load_content_file('site_info') ?? array();
                 if (empty($pages) && empty($posts) && empty($products)) {
                     $legacy   = get_option('marrison_assistant_site_content', array());
                     $pages    = !empty($legacy['pages'])    ? $legacy['pages']    : array();
@@ -336,12 +344,13 @@ class Marrison_Assistant_Content_Scanner {
                     $products = !empty($legacy['products']) ? $legacy['products'] : array();
                 }
                 $pages_filtered = $this->exclude_legal_pages($pages);
-                $result['pages']     = $this->filter_items_by_keywords($pages_filtered, $keywords, array('title', 'content'), 3, true);
-                $result['posts']     = $this->filter_items_by_keywords($posts,          $keywords, array('title', 'content'), 3, true);
-                $result['products']  = $this->filter_items_by_keywords($products, $keywords, array('title', 'description'), 5, true);
-                $result['events']    = $this->filter_items_by_keywords($events,   $keywords, array('title', 'excerpt'),     5, false);
-                $result['shipping']  = $shipping;
-                $result['site_info'] = $site_info;
+                $result['pages']        = $this->filter_items_by_keywords($pages_filtered, $keywords, array('title', 'content'), 3, true);
+                $result['posts']        = $this->filter_items_by_keywords($posts,          $keywords, array('title', 'content'), 3, true);
+                $result['products']     = $this->filter_items_by_keywords($products, $keywords, array('title', 'description'), 5, true);
+                $result['events']       = $this->filter_items_by_keywords($events,   $keywords, array('title', 'excerpt'),     5, false);
+                $result['custom_posts'] = $this->filter_items_by_keywords($custom_posts, $keywords, array('title', 'content', 'post_type_label'), 5, false);
+                $result['shipping']     = $shipping;
+                $result['site_info']    = $site_info;
                 break;
         }
 
@@ -390,7 +399,8 @@ class Marrison_Assistant_Content_Scanner {
         );
 
         $words = array_filter(explode(' ', $query), function ($w) use ($stopwords) {
-            return strlen($w) >= 3 && !in_array($w, $stopwords);
+            $is_number = ctype_digit($w) && strlen($w) >= 2;
+            return ($is_number || strlen($w) >= 3) && !in_array($w, $stopwords);
         });
 
         return array_values(array_unique($words));
@@ -992,6 +1002,112 @@ class Marrison_Assistant_Content_Scanner {
         wp_reset_postdata();
         
         return $products;
+    }
+    
+    /**
+     * Scansiona tutti i Custom Post Types (CPT) pubblici esclusi quelli già gestiti
+     */
+    public function scan_custom_post_types() {
+        $custom_posts = array();
+        
+        // Ottieni tutti i post types pubblici esclusi quelli standard
+        $excluded_types = array('post', 'page', 'attachment', 'revision', 'nav_menu_item', 'product', 'tribe_events');
+        $post_types = get_post_types(array(
+            'public' => true,
+            '_builtin' => false
+        ), 'names');
+        
+        // Rimuovi i tipi già gestiti
+        $post_types = array_diff($post_types, $excluded_types);
+        
+        if (empty($post_types)) {
+            return $custom_posts;
+        }
+        
+        foreach ($post_types as $post_type) {
+            $args = array(
+                'post_type' => $post_type,
+                'post_status' => 'publish',
+                'posts_per_page' => -1,
+                'orderby' => 'title',
+                'order' => 'ASC'
+            );
+            
+            $query = new WP_Query($args);
+            
+            if ($query->have_posts()) {
+                while ($query->have_posts()) {
+                    $query->the_post();
+                    $id = get_the_ID();
+                    
+                    $cpt_data = array(
+                        'id' => $id,
+                        'title' => get_the_title(),
+                        'content' => wp_strip_all_tags(get_the_content()),
+                        'excerpt' => get_the_excerpt(),
+                        'url' => get_permalink(),
+                        'post_type' => $post_type,
+                        'post_type_label' => get_post_type_object($post_type)->labels->singular_name,
+                        'date' => get_the_date('Y-m-d H:i:s'),
+                        'author' => get_the_author(),
+                        'categories' => array(),
+                        'tags' => array()
+                    );
+                    
+                    // Scansiona le tassonomie del CPT
+                    $taxonomies = get_object_taxonomies($post_type, 'objects');
+                    foreach ($taxonomies as $taxonomy) {
+                        if ($taxonomy->public && $taxonomy->hierarchical) {
+                            // Categorie/tassonomie gerarchiche
+                            $terms = wp_get_post_terms($id, $taxonomy->name, array('fields' => 'names'));
+                            if (!empty($terms)) {
+                                $cpt_data['categories'] = array_merge($cpt_data['categories'], $terms);
+                            }
+                        } elseif ($taxonomy->public && !$taxonomy->hierarchical) {
+                            // Tags/tassonomie non gerarchiche
+                            $terms = wp_get_post_terms($id, $taxonomy->name, array('fields' => 'names'));
+                            if (!empty($terms)) {
+                                $cpt_data['tags'] = array_merge($cpt_data['tags'], $terms);
+                            }
+                        }
+                    }
+                    
+                    // Rimuovi duplicati
+                    $cpt_data['categories'] = array_unique($cpt_data['categories']);
+                    $cpt_data['tags'] = array_unique($cpt_data['tags']);
+                    
+                    // Aggiungi campi personalizzati (meta)
+                    $custom_fields = get_post_custom($id);
+                    if (!empty($custom_fields)) {
+                        $cpt_data['meta'] = array();
+                        foreach ($custom_fields as $key => $values) {
+                            // Salta campi interni di WordPress
+                            if (strpos($key, '_') === 0) continue;
+                            
+                            $value = is_array($values) ? reset($values) : $values;
+                            if (is_string($value) && !empty($value)) {
+                                $cpt_data['meta'][$key] = wp_strip_all_tags($value);
+                            }
+                        }
+                    }
+                    
+                    // Aggiungi immagine in evidenza se presente
+                    $thumbnail_id = get_post_thumbnail_id($id);
+                    if ($thumbnail_id) {
+                        $image_url = wp_get_attachment_image_url($thumbnail_id, 'medium');
+                        if ($image_url) {
+                            $cpt_data['image'] = $image_url;
+                        }
+                    }
+                    
+                    $custom_posts[] = $cpt_data;
+                }
+            }
+            
+            wp_reset_postdata();
+        }
+        
+        return $custom_posts;
     }
     
     /**

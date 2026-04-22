@@ -110,7 +110,7 @@ class Marrison_Assistant_Site_Agent {
 
         // Messaggio personalizzato per utenti non loggati (se il check è disabilitato ma l'utente non è loggato)
         if (!is_user_logged_in()) {
-            $welcome = 'Ciao! Per accedere all\'assistente completo, effettua il login. Posso comunque aiutarti con informazioni generali.';
+            $welcome = 'Ciao! Sono ' . $assistant_name . ', posso aiutarti con informazioni generali.';
         }
 
         // Assicurati che il messaggio di benvenuto non sia mai vuoto

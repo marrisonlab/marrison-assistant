@@ -334,9 +334,10 @@ class Marrison_Assistant_Gemini {
             $history_text .
             "REGOLE ASSOLUTE:\n" .
             "1. Rispondi SOLO con informazioni presenti nel CONTESTO sopra. NON inventare, NON dedurre, NON aggiungere dettagli non presenti.\n" .
-            "2. Se l'informazione richiesta NON è nel CONTESTO, rispondi esattamente: \"Non ho questa informazione. Ti consiglio di visitare il sito o la pagina Contatti per maggiori dettagli.\"\n" .
+            "2. Se l'informazione richiesta NON è nel CONTESTO, rispondi esattamente: \"Non ho questa informazione. Ti consiglio di visitare il negozio o la pagina Contatti per maggiori dettagli.\"\n" .
             "3. Rispondi in max 3 frasi dirette.\n" .
-            "4. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL.\n\n" .
+            "4. Per i prodotti: SEMPRE includi il link al prodotto usando [Nome Prodotto](URL).\n" .
+            "5. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL.\n\n" .
             "DOMANDA: " . $message . "\n\nRispondi in italiano:";
 
         error_log('Marrison Assistant: prompt size=' . strlen($full_prompt) . ' bytes, intent=' . $intent);
@@ -431,7 +432,7 @@ class Marrison_Assistant_Gemini {
             // Se abbiamo raggiunto il limite, segnala a Gemini che potrebbero esserci altri prodotti
             if (count($filtered['products']) >= 6) {
                 $shop_url = function_exists('wc_get_page_permalink') ? wc_get_page_permalink('shop') : '';
-                $note = '[Mostro solo i prodotti più rilevanti. Se ne esistono altri, invita l\'utente a "vedere tutti i prodotti"';
+                $note = '[Mostro solo i prodotti più rilevanti. Se ne esistono altri, invita l\'utente a visitare il negozio';
                 if ($shop_url) $note .= ': ' . $shop_url;
                 $note .= ']';
                 $lines[] = $note;
@@ -459,6 +460,26 @@ class Marrison_Assistant_Gemini {
                 $excerpt = strip_tags($po['excerpt'] ?? '');
                 $snippet = !empty($text) ? substr($text, 0, 400) : substr($excerpt, 0, 400);
                 $lines[] = '"' . $po['title'] . '" | URL: ' . $po['url'] . ' | ' . $snippet;
+            }
+            $parts[] = implode("\n", $lines);
+        }
+
+        // Custom Post Types (CPT)
+        if (!empty($filtered['custom_posts'])) {
+            $lines = array('[CONTENUTI PERSONALIZZATI]');
+            foreach ($filtered['custom_posts'] as $cpt) {
+                $text    = strip_tags($cpt['content'] ?? '');
+                $excerpt = strip_tags($cpt['excerpt'] ?? '');
+                $snippet = !empty($text) ? substr($text, 0, 300) : substr($excerpt, 0, 300);
+                $line = '"' . $cpt['title'] . '" | URL: ' . $cpt['url'];
+                if (!empty($cpt['post_type_label'])) {
+                    $line .= ' | Tipo: ' . $cpt['post_type_label'];
+                }
+                if (!empty($cpt['categories'])) {
+                    $line .= ' | Categorie: ' . implode(', ', array_slice($cpt['categories'], 0, 3));
+                }
+                $line .= ' | ' . $snippet;
+                $lines[] = $line;
             }
             $parts[] = implode("\n", $lines);
         }

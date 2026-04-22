@@ -321,12 +321,12 @@ jQuery(document).ready(function($) {
                 escaped = escaped.replace(/(https?:\/\/[^\s<]+|www\.[^\s<]+)/g, function(url) {
                     let href = url;
                     if (url.startsWith('www.')) href = 'https://' + url;
-                    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+                    return `<a href="${href}">${url}</a>`;
                 });
                 result += escaped;
             } else {
                 const safeText = escapeHtml(part.linkText);
-                result += `<a href="${part.url}" target="_blank" rel="noopener noreferrer">${safeText}</a>`;
+                result += `<a href="${part.url}">${safeText}</a>`;
             }
         });
 
