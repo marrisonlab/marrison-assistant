@@ -87,18 +87,34 @@ class Marrison_Assistant_Updater {
         // Estrai versione (rimuovi 'v' iniziale se presente)
         $version = ltrim($body['tag_name'], 'v');
         
+        // Priorità: zipball_url > assets_url > construct URL
+        $download_url = '';
+        if (!empty($body['zipball_url'])) {
+            $download_url = $body['zipball_url'];
+        } elseif (!empty($body['assets']) && is_array($body['assets'])) {
+            // Cerca il primo asset che sia un .zip
+            foreach ($body['assets'] as $asset) {
+                if (!empty($asset['browser_download_url']) && strpos($asset['browser_download_url'], '.zip') !== false) {
+                    $download_url = $asset['browser_download_url'];
+                    break;
+                }
+            }
+        }
+        
+        // Se ancora non abbiamo URL, costruiscilo
+        if (empty($download_url)) {
+            $download_url = 'https://github.com/' . $this->github_user . '/' . $this->github_repo . '/archive/refs/tags/' . $body['tag_name'] . '.zip';
+        }
+        
+        error_log('Marrison Assistant: GitHub release download URL: ' . $download_url);
+        
         $data = [
             'version' => $version,
             'url' => $body['html_url'] ?? 'https://github.com/' . $this->github_user . '/' . $this->github_repo,
-            'download_url' => $body['zipball_url'] ?? '',
+            'download_url' => $download_url,
             'published_at' => $body['published_at'] ?? '',
             'body' => $body['body'] ?? ''
         ];
-
-        // Se non c'è zipball_url, costruisci URL alternativo
-        if (empty($data['download_url'])) {
-            $data['download_url'] = 'https://github.com/' . $this->github_user . '/' . $this->github_repo . '/archive/refs/tags/' . $body['tag_name'] . '.zip';
-        }
 
         return $data;
     }
