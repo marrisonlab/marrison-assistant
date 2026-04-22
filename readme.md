@@ -2,10 +2,15 @@
 
 Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
-**Versione:** 1.2.0  
+**Versione:** 1.2.1  
 **Autore:** [Marrisonlab](https://marrisonlab.com)
 
 ## 📝 Changelog
+
+### v1.2.1 (2025-04-22)
+- **Fix:** Risolto problema aggiornamenti GitHub con cartelle a nome casuale
+- **Fix:** WordPress ora riconosce correttamente il plugin dopo aggiornamento
+- **Fix:** Aggiunto sistema automatico per rinominare cartelle GitHub
 
 ### v1.2.0 (2025-04-22)
 - **Nuovo:** Scansione completa Custom Post Types (CPT) e Custom Taxonomies (CCT)

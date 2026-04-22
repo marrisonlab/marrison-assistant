@@ -18,6 +18,7 @@ class Marrison_Assistant_Updater {
     public function __construct() {
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
         add_filter('plugins_api', [$this, 'plugin_info'], 20, 3);
+        add_action('upgrader_pre_download', [$this, 'perform_plugin_update'], 10, 2);
     }
 
     /**
@@ -100,6 +101,79 @@ class Marrison_Assistant_Updater {
         }
 
         return $data;
+    }
+
+    /**
+     * Sovrascrive il processo di aggiornamento per gestire cartelle GitHub con nomi casuali
+     */
+    public function perform_plugin_update($upgrader_object, $options) {
+        if (!isset($options['action']) || $options['action'] !== 'update') {
+            return;
+        }
+        if (!isset($options['type']) || $options['type'] !== 'plugin') {
+            return;
+        }
+
+        $plugin_file = $this->plugin_file;
+        if (!isset($options['plugins']) || !is_array($options['plugins'])) {
+            return;
+        }
+
+        if (!in_array($plugin_file, $options['plugins'])) {
+            return;
+        }
+
+        // Esegui l'aggiornamento personalizzato dopo quello standard
+        add_action('upgrader_process_complete', [$this, 'fix_github_folder_name'], 10, 2);
+    }
+
+    /**
+     * Corregge il nome della cartella dopo l'aggiornamento GitHub
+     */
+    public function fix_github_folder_name($upgrader_object, $options) {
+        global $wp_filesystem;
+        
+        if (!function_exists('WP_Filesystem')) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        WP_Filesystem();
+
+        if (!$wp_filesystem) {
+            return;
+        }
+
+        $plugin_dir = WP_PLUGIN_DIR . '/' . $this->plugin_slug;
+        $expected_plugin_file = $plugin_dir . '/' . basename($this->plugin_file);
+
+        // Se il file del plugin esiste nella posizione corretta, non fare nulla
+        if ($wp_filesystem->exists($expected_plugin_file)) {
+            return;
+        }
+
+        // Cerca cartelle GitHub con nomi casuali
+        $plugin_base_files = glob(WP_PLUGIN_DIR . '/' . $this->plugin_slug . '-*');
+        if (empty($plugin_base_files)) {
+            return;
+        }
+
+        foreach ($plugin_base_files as $candidate_dir) {
+            if (!is_dir($candidate_dir)) {
+                continue;
+            }
+
+            $candidate_plugin_file = $candidate_dir . '/' . basename($this->plugin_file);
+            if ($wp_filesystem->exists($candidate_plugin_file)) {
+                // Rinomina la cartella al nome corretto
+                if ($wp_filesystem->move($candidate_dir, $plugin_dir)) {
+                    // Pulisci la cache dei plugin
+                    wp_clean_plugins_cache(true);
+                    delete_site_transient('update_plugins');
+                    
+                    error_log('Marrison Assistant: GitHub folder renamed from ' . basename($candidate_dir) . ' to ' . $this->plugin_slug);
+                }
+                break;
+            }
+        }
     }
 
     /**
