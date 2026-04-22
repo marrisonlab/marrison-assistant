@@ -229,10 +229,35 @@ class Marrison_Assistant_Content_Scanner {
                     $legacy = get_option('marrison_assistant_site_content', array());
                     $items  = !empty($legacy['products']) ? $legacy['products'] : array();
                 }
-                // fallback_all=true: se nessuna keyword matcha, torna i primi 10 prodotti
-                $result['products'] = $this->filter_items_by_keywords(
-                    $items, $keywords, array('title', 'description', 'short_description'), 6, true
-                );
+
+                if (count($keywords) >= 2) {
+                    // Passo 1: cerca match perfetti (AND — tutte le keyword devono matchare)
+                    $perfect = $this->filter_items_by_keywords(
+                        $items, $keywords, array('title', 'description', 'short_description'), 6, false, true
+                    );
+                    if (!empty($perfect)) {
+                        // Match precisi trovati: usa questi
+                        $result['products'] = $perfect;
+                    } else {
+                        // Passo 2: nessun match perfetto → torna match parziali (OR)
+                        // L'AI li presenterà come "non ho X ma posso suggerirti questi"
+                        $partial = $this->filter_items_by_keywords(
+                            $items, $keywords, array('title', 'description', 'short_description'), 6, false, false
+                        );
+                        if (!empty($partial)) {
+                            $result['products']               = $partial;
+                            $result['products_partial_match'] = true; // segnala all'AI che sono match parziali
+                        } else {
+                            // Nessun prodotto nemmeno per match parziale
+                            $result['products'] = array();
+                        }
+                    }
+                } else {
+                    // Query generica (0-1 keyword): OR + fallback ai primi N prodotti
+                    $result['products'] = $this->filter_items_by_keywords(
+                        $items, $keywords, array('title', 'description', 'short_description'), 6, true, false
+                    );
+                }
                 break;
 
             case 'orders':
@@ -254,9 +279,24 @@ class Marrison_Assistant_Content_Scanner {
 
             case 'events':
                 $events = $this->load_content_file('events') ?? array();
-                $result['events'] = $this->filter_items_by_keywords(
-                    $events, $keywords, array('title', 'content', 'excerpt'), 10, true
-                );
+                if (count($keywords) >= 2) {
+                    $perfect_ev = $this->filter_items_by_keywords(
+                        $events, $keywords, array('title', 'content', 'excerpt'), 10, false, true
+                    );
+                    if (!empty($perfect_ev)) {
+                        $result['events'] = $perfect_ev;
+                    } else {
+                        $partial_ev = $this->filter_items_by_keywords(
+                            $events, $keywords, array('title', 'content', 'excerpt'), 10, false, false
+                        );
+                        $result['events']                = $partial_ev;
+                        $result['events_partial_match']  = !empty($partial_ev);
+                    }
+                } else {
+                    $result['events'] = $this->filter_items_by_keywords(
+                        $events, $keywords, array('title', 'content', 'excerpt'), 10, true, false
+                    );
+                }
                 break;
 
             case 'info':
@@ -269,9 +309,11 @@ class Marrison_Assistant_Content_Scanner {
                     $pages  = !empty($legacy['pages']) ? $legacy['pages'] : array();
                     $posts  = !empty($legacy['posts']) ? $legacy['posts'] : array();
                 }
+                // Escludi pagine legali/privacy che inquinano le risposte su contatti
+                $pages_filtered = $this->exclude_legal_pages($pages ?? array());
                 // fallback_all=true: se la keyword non matcha esattamente, includi comunque le pagine
                 $result['pages']     = $this->filter_items_by_keywords(
-                    $pages ?? array(), $keywords, array('title', 'content', 'excerpt'), 6, true
+                    $pages_filtered, $keywords, array('title', 'content', 'excerpt'), 6, true
                 );
                 $result['posts']     = $this->filter_items_by_keywords(
                     $posts ?? array(), $keywords, array('title', 'content', 'excerpt'), 4, true
@@ -293,8 +335,9 @@ class Marrison_Assistant_Content_Scanner {
                     $posts    = !empty($legacy['posts'])    ? $legacy['posts']    : array();
                     $products = !empty($legacy['products']) ? $legacy['products'] : array();
                 }
-                $result['pages']     = $this->filter_items_by_keywords($pages,    $keywords, array('title', 'content'),      3, true);
-                $result['posts']     = $this->filter_items_by_keywords($posts,    $keywords, array('title', 'content'),      3, true);
+                $pages_filtered = $this->exclude_legal_pages($pages);
+                $result['pages']     = $this->filter_items_by_keywords($pages_filtered, $keywords, array('title', 'content'), 3, true);
+                $result['posts']     = $this->filter_items_by_keywords($posts,          $keywords, array('title', 'content'), 3, true);
                 $result['products']  = $this->filter_items_by_keywords($products, $keywords, array('title', 'description'), 5, true);
                 $result['events']    = $this->filter_items_by_keywords($events,   $keywords, array('title', 'excerpt'),     5, false);
                 $result['shipping']  = $shipping;
@@ -303,6 +346,26 @@ class Marrison_Assistant_Content_Scanner {
         }
 
         return $result;
+    }
+
+    /**
+     * Esclude pagine legali/privacy dall'array di pagine per evitare
+     * che il loro contenuto inquini le risposte su contatti e servizi.
+     */
+    private function exclude_legal_pages($pages) {
+        $legal_patterns = array(
+            'privacy', 'cookie', 'gdpr', 'termini', 'condizioni',
+            'disclaimer', 'legal', 'note legali', 'informativa',
+        );
+        return array_values(array_filter($pages, function($page) use ($legal_patterns) {
+            $title = strtolower($page['title'] ?? '');
+            foreach ($legal_patterns as $pattern) {
+                if (strpos($title, $pattern) !== false) {
+                    return false;
+                }
+            }
+            return true;
+        }));
     }
 
     /**
@@ -343,8 +406,9 @@ class Marrison_Assistant_Content_Scanner {
      * @param  array   $fields       campi dell'item su cui cercare (il primo ha peso 3x)
      * @param  int     $limit        numero massimo di risultati
      * @param  bool    $fallback_all se true, torna i primi $limit item se nessun match
+     * @param  bool    $strict_match se true con 2+ keyword, tutte devono matchare (AND)
      */
-    private function filter_items_by_keywords($items, $keywords, $fields, $limit, $fallback_all = false) {
+    private function filter_items_by_keywords($items, $keywords, $fields, $limit, $fallback_all = false, $strict_match = false) {
         if (empty($items)) return array();
 
         // Senza keyword: restituisce i primi $limit senza filtrare
@@ -354,7 +418,8 @@ class Marrison_Assistant_Content_Scanner {
 
         $scored = array();
         foreach ($items as $item) {
-            $score = 0;
+            $score          = 0;
+            $matched_kws    = array(); // tiene traccia di quali keyword hanno avuto match
 
             // Cerca nei campi testo specificati
             foreach ($fields as $idx => $field) {
@@ -364,6 +429,7 @@ class Marrison_Assistant_Content_Scanner {
                 foreach ($keywords as $kw) {
                     if ($this->keyword_matches($text, $kw)) {
                         $score += $weight;
+                        $matched_kws[$kw] = true;
                     }
                 }
             }
@@ -374,13 +440,20 @@ class Marrison_Assistant_Content_Scanner {
                 foreach ($keywords as $kw) {
                     if ($this->keyword_matches($attrs_text, $kw)) {
                         $score += 2;
+                        $matched_kws[$kw] = true;
                     }
                 }
             }
 
-            if ($score > 0) {
-                $scored[] = array('item' => $item, 'score' => $score);
+            if ($score <= 0) continue;
+
+            // Strict match: se attivo e ci sono 2+ keyword, tutte devono matchare (AND).
+            // Evita che un prodotto "Avellino Basket" appaia quando l'utente chiede "avellino calcio".
+            if ($strict_match && count($keywords) >= 2 && count($matched_kws) < count($keywords)) {
+                continue;
             }
+
+            $scored[] = array('item' => $item, 'score' => $score);
         }
 
         if (empty($scored)) {

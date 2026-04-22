@@ -173,7 +173,7 @@ class Marrison_Assistant_Gemini {
      * Invia il prompt al Commander (proxy) e ritorna la risposta AI
      */
     private function call_commander($full_prompt) {
-        $commander_url = get_option('marrison_assistant_commander_url', 'https://marrisonlab.com');
+        $commander_url = 'https://marrisonlab.com';
         $endpoint = trailingslashit($commander_url) . 'wp-json/marrison-commander/v1/chat';
         $site_url = get_site_url();
 
@@ -259,6 +259,7 @@ class Marrison_Assistant_Gemini {
         $this->send_token_log_to_commander($log_entry);
 
         if ($http_code === 200) {
+            set_transient('marrison_site_connected', 'yes', HOUR_IN_SECONDS);
             if (!empty($body['message'])) {
                 return $body['message'];
             }
@@ -266,8 +267,14 @@ class Marrison_Assistant_Gemini {
             return false;
         }
 
-        if ($http_code === 429) return '⚠️ Quota giornaliera esaurita. Riprova domani.';
-        if ($http_code === 403) return '⚠️ Sito non autorizzato. Contatta l\'amministratore.';
+        if ($http_code === 429) {
+            set_transient('marrison_site_connected', 'yes', HOUR_IN_SECONDS); // quota finita ma sito è collegato
+            return '⚠️ Quota giornaliera esaurita. Riprova domani.';
+        }
+        if ($http_code === 403) {
+            set_transient('marrison_site_connected', 'no', 5 * MINUTE_IN_SECONDS);
+            return '⚠️ Sito non autorizzato. Contatta l\'amministratore.';
+        }
 
         error_log('Marrison Assistant: Commander HTTP ' . $http_code . ' - body: ' . wp_remote_retrieve_body($response));
         return false;
@@ -291,10 +298,10 @@ class Marrison_Assistant_Gemini {
         // Costruisce un contesto compatto in testo (<10KB)
         $context = $this->build_compact_context($filtered);
 
-        $custom_prompt = get_option(
-            'marrison_assistant_custom_prompt',
-            'Sei un assistente AI per questo sito. Per prodotti: mantieni la categoria discussa anche se un colore/taglia non è disponibile, proponi alternative nella stessa categoria.'
-        );
+        $custom_prompt_enabled = (bool) get_option('marrison_assistant_enable_custom_prompt', 0);
+        $custom_prompt = $custom_prompt_enabled
+            ? get_option('marrison_assistant_custom_prompt', '')
+            : 'Sei un assistente AI per questo sito. Per prodotti: mantieni la categoria discussa anche se un colore/taglia non è disponibile, proponi alternative nella stessa categoria.';
 
         $intent_hints = array(
             'products' => 'Domanda su prodotti del negozio.',
@@ -366,9 +373,42 @@ class Marrison_Assistant_Gemini {
     private function build_compact_context($filtered) {
         $parts = array();
 
+        // Info sito PRIMA di tutto: email, telefono, indirizzo sono la risposta più diretta
+        if (!empty($filtered['site_info'])) {
+            $si    = $filtered['site_info'];
+            $lines = array('[INFO SITO]');
+            if (!empty($si['site_name']))        $lines[] = 'Nome sito: ' . $si['site_name'];
+            if (!empty($si['site_description'])) $lines[] = 'Descrizione: ' . $si['site_description'];
+            if (!empty($si['store_address']))    $lines[] = 'Indirizzo: ' . $si['store_address'];
+            if (!empty($si['phones'])) {
+                $lines[] = 'Telefono: ' . implode(' / ', array_slice($si['phones'], 0, 5));
+            }
+            if (!empty($si['emails'])) {
+                $lines[] = 'Email: ' . implode(', ', array_slice($si['emails'], 0, 5));
+            }
+            if (!empty($si['admin_email']))      $lines[] = 'Email admin: ' . $si['admin_email'];
+            if (!empty($si['contact_pages'])) {
+                foreach ($si['contact_pages'] as $cp) {
+                    $lines[] = '[Pagina contatti] ' . $cp;
+                }
+            }
+            if (!empty($si['widgets'])) {
+                foreach ($si['widgets'] as $w) {
+                    $lines[] = 'Widget: ' . substr($w, 0, 300);
+                }
+            }
+            if (count($lines) > 1) {
+                $parts[] = implode("\n", $lines);
+            }
+        }
+
         // Prodotti
         if (!empty($filtered['products'])) {
-            $lines = array('[P]');
+            // Match parziali: l'AI deve presentarli come suggerimenti, NON come risposta esatta
+            $prod_header = empty($filtered['products_partial_match'])
+                ? '[P]'
+                : '[P - match parziale: non corrisponde esattamente alla ricerca, presentali come suggerimenti correlati dicendo che il prodotto cercato non è disponibile]';
+            $lines = array($prod_header);
             foreach ($filtered['products'] as $p) {
                 $line = $p['title'] . '|' . $p['url'];
                 if (!empty($p['price']))        $line .= '|€' . $p['price'];
@@ -397,35 +437,6 @@ class Marrison_Assistant_Gemini {
                 $lines[] = $note;
             }
             $parts[] = implode("\n", $lines);
-        }
-
-        // Info sito (indirizzo, widget footer, ecc.)
-        if (!empty($filtered['site_info'])) {
-            $si    = $filtered['site_info'];
-            $lines = array('[INFO SITO]');
-            if (!empty($si['site_name']))        $lines[] = 'Nome sito: ' . $si['site_name'];
-            if (!empty($si['site_description'])) $lines[] = 'Descrizione: ' . $si['site_description'];
-            if (!empty($si['store_address']))    $lines[] = 'Indirizzo: ' . $si['store_address'];
-            if (!empty($si['admin_email']))      $lines[] = 'Email admin: ' . $si['admin_email'];
-            if (!empty($si['phones'])) {
-                $lines[] = 'Telefono: ' . implode(' / ', array_slice($si['phones'], 0, 5));
-            }
-            if (!empty($si['emails'])) {
-                $lines[] = 'Email: ' . implode(', ', array_slice($si['emails'], 0, 5));
-            }
-            if (!empty($si['contact_pages'])) {
-                foreach ($si['contact_pages'] as $cp) {
-                    $lines[] = '[Pagina contatti] ' . $cp;
-                }
-            }
-            if (!empty($si['widgets'])) {
-                foreach ($si['widgets'] as $w) {
-                    $lines[] = 'Widget: ' . substr($w, 0, 300);
-                }
-            }
-            if (count($lines) > 1) {
-                $parts[] = implode("\n", $lines);
-            }
         }
 
         // Pagine
@@ -499,7 +510,10 @@ class Marrison_Assistant_Gemini {
 
         // Eventi
         if (!empty($filtered['events'])) {
-            $lines = array('[EVENTI]');
+            $ev_header = empty($filtered['events_partial_match'])
+                ? '[EVENTI]'
+                : '[EVENTI - match parziale: non corrisponde esattamente alla ricerca, presentali come suggerimenti correlati dicendo che l\'evento cercato non è disponibile]';
+            $lines = array($ev_header);
             foreach ($filtered['events'] as $ev) {
                 $line = '"' . $ev['title'] . '" | URL: ' . $ev['url'];
                 if (!empty($ev['start']))        $line .= ' | Data: ' . $ev['start'];
@@ -621,7 +635,10 @@ class Marrison_Assistant_Gemini {
      * Costruisce il prompt completo con knowledge base e istruzioni
      */
     public function build_complete_prompt($user_message, $site_knowledge = '') {
-        $custom_prompt = get_option('marrison_assistant_custom_prompt', 'Sei un assistente AI per questo sito web. Rispondi in modo professionale e utile basandoti sui contenuti del sito.');
+        $custom_prompt_enabled = (bool) get_option('marrison_assistant_enable_custom_prompt', 0);
+        $custom_prompt = $custom_prompt_enabled
+            ? get_option('marrison_assistant_custom_prompt', '')
+            : '';
         
         $complete_prompt = "Sei un assistente AI per questo sito web.\n\n";
         
@@ -629,7 +646,9 @@ class Marrison_Assistant_Gemini {
             $complete_prompt .= "CONTENUTI DEL SITO:\n" . $site_knowledge . "\n\n";
         }
         
-        $complete_prompt .= "ISTRUZIONI ADMIN:\n" . $custom_prompt . "\n\n";
+        if (!empty($custom_prompt)) {
+            $complete_prompt .= "ISTRUZIONI ADMIN:\n" . $custom_prompt . "\n\n";
+        }
         $complete_prompt .= "UTENTE DICE:\n" . $user_message . "\n\n";
         $complete_prompt .= "Rispondi in modo utile e professionale basandoti sulle informazioni fornite. Se non trovi informazioni rilevanti nei contenuti del sito, rispondi in modo generale ma utile.";
         

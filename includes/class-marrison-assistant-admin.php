@@ -58,8 +58,7 @@ class Marrison_Assistant_Admin {
      * Registra le impostazioni del plugin
      */
     public function register_settings() {
-        register_setting('marrison_assistant_settings', 'marrison_assistant_commander_url');
-        register_setting('marrison_assistant_settings', 'marrison_assistant_gemini_api_key');
+        // NOTA: marrison_assistant_gemini_api_key rimosso — API key gestita dal Commander
         register_setting('marrison_assistant_settings', 'marrison_assistant_custom_prompt');
         register_setting('marrison_assistant_settings', 'marrison_assistant_logged_only');
         
@@ -114,28 +113,8 @@ class Marrison_Assistant_Admin {
                     settings_fields('marrison_assistant_settings');
                     do_settings_sections('marrison_assistant_settings');
                     ?>
-                    
-                    <div class="marrison-assistant-section">
+                                        <div class="marrison-assistant-section">
                         <h2>⚙️ Configurazione API</h2>
-                        
-                        <table class="form-table">
-                            <tr>
-                                <th scope="row">
-                                    <label for="marrison_assistant_commander_url">Commander URL</label>
-                                </th>
-                                <td>
-                                    <input type="url" 
-                                           id="marrison_assistant_commander_url" 
-                                           name="marrison_assistant_commander_url" 
-                                           value="<?php echo esc_attr(get_option('marrison_assistant_commander_url', 'https://marrisonlab.com')); ?>" 
-                                           class="regular-text"
-                                           placeholder="https://marrisonlab.com">
-                                    <p class="description">URL del sito con <strong>Marrison Commander</strong> installato. Gestisce API keys e quote giornaliere.</p>
-                                </td>
-                            </tr>
-                            
-                        </table>
-                    </div>
                     
                     <div class="marrison-assistant-section">
                         <h2>🤖 Comportamento AI</h2>

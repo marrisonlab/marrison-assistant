@@ -126,8 +126,22 @@ jQuery(document).ready(function($) {
             return 'products';
         }
 
-        // Pattern per eventi
-        if (/\b(evento|eventi|calendario|appuntamento|quando|data|incontro|workshop|seminario)\b/.test(lowerMsg)) {
+        // Pattern per eventi (keyword dirette)
+        if (/\b(evento|eventi|calendario|appuntamento|incontro|workshop|seminario|concerto|spettacolo|mostra|fiera|sagra|festa|manifestazione|programma)\b/.test(lowerMsg)) {
+            return 'events';
+        }
+        // Pattern per domande su attività/programma in una data specifica
+        // es. "che si fa il 25 aprile", "cosa c'è sabato", "cosa succede questo weekend"
+        if (/\b(che si fa|cosa si fa|cosa c[''`']è|cosa c'è|c[''`']è qualcosa|cosa succede|cosa fanno|cosa fare|cosa fai|si svolge|si terrà|si tiene|programma|in programma)\b/.test(lowerMsg)) {
+            return 'events';
+        }
+        // Data + contesto temporale → probabile domanda su eventi
+        if (/\b(questo weekend|fine settimana|sabato|domenica|prossima settimana|prossimo|domani)\b/.test(lowerMsg)) {
+            return 'events';
+        }
+        // Mese o data + parola interrogativa → es. "il 25 aprile cosa c'è"
+        if (/\b(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|\d{1,2}[\/\-]\d{1,2})\b/.test(lowerMsg) &&
+            /\b(cosa|che|come|quando|dove|ci sono|c'è|cè)\b/.test(lowerMsg)) {
             return 'events';
         }
 
@@ -146,7 +160,14 @@ jQuery(document).ready(function($) {
         $('#marrison-intent-buttons').fadeOut(200, function() { $(this).remove(); });
 
         if (conversationState.step === 'ready') {
-            return true; // Intent già impostato da bottone o da messaggio precedente
+            // Ri-valuta l'intent ad ogni messaggio: se la domanda riguarda un argomento
+            // diverso da quello corrente, aggiorna il contesto inviato al server.
+            // Se il rilevamento è ambiguo ('general'), mantieni l'intent esistente.
+            const newIntent = detectIntent(message);
+            if (newIntent !== 'general') {
+                conversationState.intent = newIntent;
+            }
+            return true;
         }
 
         // Primo messaggio senza bottone: rileva intent e vai diretto

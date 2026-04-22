@@ -3,7 +3,7 @@
  * Plugin Name: Marrison Assistant
  * Plugin URI: https://github.com/marrisonlab/marrison-assistant
  * Description: Asssistente professionale AI per i tuoi clienti
- * Version: 1.0.2
+ * Version: 1.1.0
  * Author: Marrisonlab
  * Author URI: https://marrisonlab.com
  * Text Domain: marrison-assistant
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definisci costanti del plugin
-define('MARRISON_ASSISTANT_VERSION', '1.0.2');
+define('MARRISON_ASSISTANT_VERSION', '1.1.0');
 define('MARRISON_ASSISTANT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MARRISON_ASSISTANT_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -135,20 +135,25 @@ class Marrison_Assistant {
      * Attivazione del plugin
      */
     public function activate() {
-        // Crea le tabelle necessarie se servono
-        // Imposta le opzioni di default
         $this->set_default_options();
-        
-        // Flush rewrite rules per i custom endpoint
         flush_rewrite_rules();
+
+        // Prima scansione immediata all'installazione
+        $scanner = new Marrison_Assistant_Content_Scanner();
+        $scanner->scan_all_content();
+
+        // Schedula la scansione automatica ogni 24 ore
+        if (!wp_next_scheduled('marrison_assistant_auto_scan')) {
+            wp_schedule_event(time() + DAY_IN_SECONDS, 'daily', 'marrison_assistant_auto_scan');
+        }
     }
     
     /**
      * Disattivazione del plugin
      */
     public function deactivate() {
-        // Pulizia se necessaria
         flush_rewrite_rules();
+        wp_clear_scheduled_hook('marrison_assistant_auto_scan');
     }
     
     /**
@@ -174,3 +179,20 @@ class Marrison_Assistant {
 
 // Inizializza il plugin
 new Marrison_Assistant();
+
+// Cron: scansione automatica contenuti ogni 24 ore
+add_action('marrison_assistant_auto_scan', function() {
+    if (!class_exists('Marrison_Assistant_Content_Scanner')) {
+        require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-content-scanner.php';
+    }
+    $scanner = new Marrison_Assistant_Content_Scanner();
+    $scanner->scan_all_content();
+    error_log('Marrison Assistant: auto-scan completato via cron - ' . current_time('mysql'));
+});
+
+// Assicura che il cron sia pianificato (utile dopo update plugin)
+add_action('plugins_loaded', function() {
+    if (!wp_next_scheduled('marrison_assistant_auto_scan')) {
+        wp_schedule_event(time() + DAY_IN_SECONDS, 'daily', 'marrison_assistant_auto_scan');
+    }
+});

@@ -2,10 +2,24 @@
 
 Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
-**Versione:** 1.0.2  
+**Versione:** 1.1.0  
 **Autore:** [Marrisonlab](https://marrisonlab.com)
 
 ## 📝 Changelog
+
+### v1.1.0 (2025-04-22)
+- **UI/UX:** Pannello di controllo unico senza tab — interfaccia moderna a card
+- **UI/UX:** Header con badge di stato in tempo reale (Servizio AI, API, Widget)
+- **Privacy:** Rimossi tutti i riferimenti visibili a Commander URL e Gemini AI
+- **Nuovo:** Toggle "Abilita prompt personalizzato" con alert consumo token
+- **Nuovo:** Cron WP per scansione automatica contenuti ogni 24 ore
+- **Nuovo:** Prima scansione automatica all'attivazione del plugin
+- **Nuovo:** File `uninstall.php` — pulizia completa dati all'eliminazione
+- **Migliorato:** LED API Connections mostra stato reale raggiungibilità servizio
+- **Fix:** Icona dashicons corretta su pulsante scansione
+- **Fix:** Rimosso pulsante Debug Eventi e anteprima widget
+- **Fix:** Commander URL hardcoded (non più configurabile)
+- **Fix:** Validazione chiave API con regex AIza...
 
 ### v1.0.2 (2025-04-21)
 - **Migliorato:** Scansione contenuti con supporto Elementor e fallback meta
