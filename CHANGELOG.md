@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2025-04-22
+
+### Fixed
+- **Conflitto plugin Marrison**: Rimosso controllo classe troppo restrittivo
+- **Compatibilità ripristinata**: Ora convive con altri plugin Marrison (Commander, etc.)
+- **Pannello admin**: Ripristinato caricamento corretto del pannello amministrazione
+- **Debug migliorato**: Logging più specifico per tracciare problemi di caricamento
+
 ## [1.3.0] - 2025-04-22
 
 ### Major Release - Complete Feature Set

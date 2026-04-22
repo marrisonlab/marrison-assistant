@@ -3,7 +3,7 @@
  * Plugin Name: Marrison Assistant
  * Plugin URI: https://github.com/marrisonlab/marrison-assistant
  * Description: Asssistente professionale AI per i tuoi clienti
- * Version: 1.3.0
+ * Version: 1.3.1
  * Author: Marrisonlab
  * Author URI: https://marrisonlab.com
  * Text Domain: marrison-assistant
@@ -14,15 +14,18 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Previeni caricamento multiplo (controllo globale)
-if (defined('MARRISON_ASSISTANT_VERSION') || class_exists('Marrison_Assistant')) {
+// Previeni caricamento multiplo (solo controllo versione)
+if (defined('MARRISON_ASSISTANT_VERSION')) {
+    error_log('Marrison Assistant: Plugin already loaded, skipping');
     return;
 }
 
 // Definisci costanti del plugin
-define('MARRISON_ASSISTANT_VERSION', '1.3.0');
+define('MARRISON_ASSISTANT_VERSION', '1.3.1');
 define('MARRISON_ASSISTANT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MARRISON_ASSISTANT_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+error_log('Marrison Assistant: Loading plugin v' . MARRISON_ASSISTANT_VERSION . ' from ' . MARRISON_ASSISTANT_PLUGIN_DIR);
 
 // Carica i file necessari
 require_once MARRISON_ASSISTANT_PLUGIN_DIR . 'includes/class-marrison-assistant-white-label.php';
@@ -183,6 +186,7 @@ class Marrison_Assistant {
 }
 
 // Inizializza il plugin
+error_log('Marrison Assistant: Initializing main plugin class');
 new Marrison_Assistant();
 
 // Cron: scansione automatica contenuti ogni 24 ore

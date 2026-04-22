@@ -25,19 +25,30 @@ class Marrison_Assistant_White_Label {
         self::$loaded = true;
 
         $file = MARRISON_ASSISTANT_PLUGIN_DIR . 'white-label.json';
+        error_log('Marrison Assistant White Label: Looking for file at ' . $file);
+        
         if (!file_exists($file)) {
+            error_log('Marrison Assistant White Label: File not found');
             self::$config = array();
             return;
         }
 
         $raw = file_get_contents($file);
         if ($raw === false) {
+            error_log('Marrison Assistant White Label: Failed to read file');
             self::$config = array();
             return;
         }
 
         $data = json_decode($raw, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log('Marrison Assistant White Label: JSON error - ' . json_last_error_msg());
+            self::$config = array();
+            return;
+        }
+        
         self::$config = is_array($data) ? $data : array();
+        error_log('Marrison Assistant White Label: Loaded config - ' . json_encode(self::$config));
     }
 
     /**

@@ -286,4 +286,5 @@ class Marrison_Assistant_Updater {
 }
 
 // Inizializza updater
+error_log('Marrison Assistant: Initializing updater');
 new Marrison_Assistant_Updater();

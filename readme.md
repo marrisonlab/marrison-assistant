@@ -2,10 +2,16 @@
 
 Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
-**Versione:** 1.3.0  
+**Versione:** 1.3.1  
 **Autore:** [Marrisonlab](https://marrisonlab.com)
 
 ## 📝 Changelog
+
+### v1.3.1 (2025-04-22)
+- **Fix:** Conflitto plugin Marrison - rimosso controllo classe troppo restrittivo
+- **Fix:** Compatibilità ripristinata con altri plugin Marrison (Commander, etc.)
+- **Fix:** Pannello admin ripristinato e caricamento corretto
+- **Fix:** Debug migliorato per tracciare problemi di caricamento
 
 ### v1.3.0 (2025-04-22) - Major Release
 - **Nuovo:** Supporto completo Custom Post Types (CPT) e Custom Taxonomies (CCT)
