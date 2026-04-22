@@ -2,10 +2,21 @@
 
 Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
-**Versione:** 1.1.0  
+**Versione:** 1.2.0  
 **Autore:** [Marrisonlab](https://marrisonlab.com)
 
 ## 📝 Changelog
+
+### v1.2.0 (2025-04-22)
+- **Nuovo:** Scansione completa Custom Post Types (CPT) e Custom Taxonomies (CCT)
+- **Nuovo:** Estrazione automatica meta campi e featured images per CPT
+- **Nuovo:** Contesto CPT integrato nelle ricerche generali dell'AI
+- **Migliorato:** Risposte mirate per contatti - numeri telefono e email diretti
+- **Migliorato:** Keyword extraction accetta numeri (es. taglie "45")
+- **Migliorato:** Link prodotti sempre inclusi con [Nome](URL)
+- **Fix:** Rimossi target="_blank" - link aprono nella stessa finestra
+- **Fix:** Inviti registrazione solo su siti con WooCommerce
+- **Fix:** Corretta fraseologia "sito negozio" in "negozio"
 
 ### v1.1.0 (2025-04-22)
 - **UI/UX:** Pannello di controllo unico senza tab — interfaccia moderna a card
@@ -44,8 +55,9 @@ Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
 - **Widget Chat** integrato nel frontend del sito
 - **Integrazione AI** tramite Google Gemini API
-- **Scansione contenuti** del sito (pagine, articoli, prodotti WooCommerce, ordini)
-- **Knowledge base** automatica dai contenuti del sito
+- **Scansione contenuti** del sito (pagine, articoli, prodotti WooCommerce, ordini, CPT, eventi)
+- **Knowledge base** automatica da tutti i contenuti del sito inclusi Custom Post Types
+- **Scansione CPT/CCT**: Supporto completo per Custom Post Types e tassonomie personalizzate
 - **RAG (Retrieval-Augmented Generation)** per risposte contestuali
 - **Rate limiting** integrato contro abusi
 - **Analytics token** per monitorare consumo API
@@ -85,8 +97,9 @@ Per maggiore sicurezza, puoi usare il **Marrison Commander** come proxy per le c
 ### Scansione Contenuti
 
 1. Nella pagina admin, clicca su "Scansiona Contenuti Sito"
-2. Il plugin analizzerà pagine, articoli e prodotti WooCommerce
+2. Il plugin analizzerà pagine, articoli, prodotti WooCommerce, ordini, eventi e tutti i Custom Post Types
 3. I contenuti verranno usati come knowledge base per l'AI
+4. I CPT e le loro tassonomie vengono inclusi automaticamente nelle ricerche
 
 ### Test Connessioni
 

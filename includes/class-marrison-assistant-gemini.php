@@ -334,10 +334,11 @@ class Marrison_Assistant_Gemini {
             $history_text .
             "REGOLE ASSOLUTE:\n" .
             "1. Rispondi SOLO con informazioni presenti nel CONTESTO sopra. NON inventare, NON dedurre, NON aggiungere dettagli non presenti.\n" .
-            "2. Se l'informazione richiesta NON è nel CONTESTO, rispondi esattamente: \"Non ho questa informazione. Ti consiglio di visitare il negozio o la pagina Contatti per maggiori dettagli.\"\n" .
-            "3. Rispondi in max 3 frasi dirette.\n" .
-            "4. Per i prodotti: SEMPRE includi il link al prodotto usando [Nome Prodotto](URL).\n" .
-            "5. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL.\n\n" .
+            "2. Per informazioni di contatto (telefono, email, indirizzo): se presenti nella sezione [INFO SITO], forniscile direttamente all'utente.\n" .
+            "3. Se l'informazione richiesta NON è nel CONTESTO, rispondi esattamente: \"Non ho questa informazione. Ti consiglio di visitare il negozio o la pagina Contatti per maggiori dettagli.\"\n" .
+            "4. Rispondi in max 3 frasi dirette.\n" .
+            "5. Per i prodotti: SEMPRE includi il link al prodotto usando [Nome Prodotto](URL).\n" .
+            "6. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL.\n\n" .
             "DOMANDA: " . $message . "\n\nRispondi in italiano:";
 
         error_log('Marrison Assistant: prompt size=' . strlen($full_prompt) . ' bytes, intent=' . $intent);

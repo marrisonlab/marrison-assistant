@@ -255,8 +255,8 @@ class Marrison_Assistant_Site_Agent {
             wp_send_json_error('Accesso negato. Effettua il login per utilizzare l\'assistente.');
         }
 
-        // SICUREZZA: gli ordini sono accessibili SOLO agli utenti loggati
-        if ($intent === 'orders' && !is_user_logged_in()) {
+        // SICUREZZA: gli ordini sono accessibili SOLO agli utenti loggati (solo se WooCommerce è attivo)
+        if ($intent === 'orders' && !is_user_logged_in() && class_exists('WooCommerce')) {
             wp_send_json_success(array(
                 'message'        => 'Per consultare i tuoi ordini devi prima effettuare il login.',
                 'time'           => current_time('H:i'),
