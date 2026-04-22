@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2025-04-22
+
+### Added
+- **Link cliccabili telefono**: Numeri di telefono automaticamente convertiti in link `tel:+39XXXXX`
+- **Link cliccabili WhatsApp**: Pulsante WhatsApp accanto ai numeri di telefono
+- **Styling link**: Colori differenziati per telefono (blu) e WhatsApp (verde)
+- **Pattern riconoscimento**: Supporto vari formati numeri italiani (+39, 0xxx, con/ senza spazi)
+
+### Fixed
+- **Caricamento multiplo**: Controllo globale per prevenire conflitti tra copie del plugin
+
 ## [1.2.1] - 2025-04-22
 
 ### Fixed

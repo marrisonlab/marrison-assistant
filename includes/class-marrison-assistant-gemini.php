@@ -338,7 +338,8 @@ class Marrison_Assistant_Gemini {
             "3. Se l'informazione richiesta NON è nel CONTESTO, rispondi esattamente: \"Non ho questa informazione. Ti consiglio di visitare il negozio o la pagina Contatti per maggiori dettagli.\"\n" .
             "4. Rispondi in max 3 frasi dirette.\n" .
             "5. Per i prodotti: SEMPRE includi il link al prodotto usando [Nome Prodotto](URL).\n" .
-            "6. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL.\n\n" .
+            "6. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL.\n" .
+            "7. Per numeri di telefono: formattali come link cliccabili tel:+39XXXXXXXXXX e WhatsApp come https://wa.me/39XXXXXXXXXX\n\n" .
             "DOMANDA: " . $message . "\n\nRispondi in italiano:";
 
         error_log('Marrison Assistant: prompt size=' . strlen($full_prompt) . ' bytes, intent=' . $intent);
@@ -347,7 +348,8 @@ class Marrison_Assistant_Gemini {
         $response = $this->call_commander($full_prompt);
 
         if ($response) {
-            return $this->strip_external_links($response);
+            $response = $this->strip_external_links($response);
+            return $this->make_phone_links_clickable($response);
         }
 
         error_log('Marrison Assistant: Commander non disponibile');
@@ -711,5 +713,36 @@ class Marrison_Assistant_Gemini {
                 error_log('Marrison Assistant: Commander ha risposto HTTP ' . $http_code . ' per log-token');
             }
         }
+    }
+
+    /**
+     * Converte i numeri di telefono in link cliccabili
+     */
+    private function make_phone_links_clickable($text) {
+        // Pattern per numeri di telefono italiani (con o senza +39)
+        $phone_pattern = '/(?:\+39\s*|0)?(\d{2,4}[\s\-\/]?\d{6,8})/';
+        
+        // Callback per processare ogni match
+        $text = preg_replace_callback($phone_pattern, function($matches) {
+            $digits = preg_replace('/\D/', '', $matches[0]); // Solo numeri
+            
+            // Se inizia con 39, rimuovilo per il formato wa.me
+            if (strlen($digits) > 9 && strpos($digits, '39') === 0) {
+                $wa_number = substr($digits, 2);
+            } else {
+                $wa_number = $digits;
+            }
+            
+            // Formatta il numero per il display
+            $display_number = $matches[0];
+            
+            // Crea link telefono e WhatsApp
+            $tel_link = '<a href="tel:+39' . $wa_number . '" style="color: #007bff; text-decoration: none; font-weight: 500;">' . $display_number . '</a>';
+            $wa_link = '<a href="https://wa.me/39' . $wa_number . '" target="_blank" style="color: #25d366; text-decoration: none; font-weight: 500; margin-left: 8px;">(WhatsApp)</a>';
+            
+            return $tel_link . $wa_link;
+        }, $text);
+        
+        return $text;
     }
 }
