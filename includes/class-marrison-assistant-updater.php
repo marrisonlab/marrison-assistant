@@ -21,11 +21,12 @@ class Marrison_Assistant_Updater {
         add_filter('plugins_api', [$this, 'plugin_info'], 20, 3);
         // Fallback robusto: se WP fallisce il download (path nullo), scarichiamo noi in un tmp file.
         add_filter('upgrader_pre_download', [$this, 'pre_download_package'], 10, 3);
-        add_action('upgrader_pre_download', [$this, 'perform_plugin_update'], 10, 2);
         // WP core currently calls this filter with 1 argument ($options). Accepting up to 3
         // keeps compatibility with any older internal usage in our code.
         add_filter('upgrader_package_options', [$this, 'debug_package_options'], 10, 3);
         add_action('upgrader_process_complete', [$this, 'cleanup_maintenance_file'], 10, 2);
+        // Fix cartella GitHub (rename suffisso) dopo update
+        add_action('upgrader_process_complete', [$this, 'fix_github_folder_name'], 10, 2);
     }
 
     /**
@@ -204,9 +205,10 @@ class Marrison_Assistant_Updater {
     }
 
     /**
-     * Sovrascrive il processo di aggiornamento per gestire cartelle GitHub con nomi casuali
+     * Corregge il nome della cartella dopo l'aggiornamento GitHub
      */
-    public function perform_plugin_update($upgrader_object, $options) {
+    public function fix_github_folder_name($upgrader_object, $options) {
+        // Agisci solo sugli update plugin e solo quando riguarda questo plugin
         if (!isset($options['action']) || $options['action'] !== 'update') {
             return;
         }
@@ -214,23 +216,17 @@ class Marrison_Assistant_Updater {
             return;
         }
 
-        $plugin_file = $this->plugin_file;
-        if (!isset($options['plugins']) || !is_array($options['plugins'])) {
+        $plugins = [];
+        if (isset($options['plugins']) && is_array($options['plugins'])) {
+            $plugins = $options['plugins'];
+        } elseif (isset($options['plugin'])) {
+            $plugins = [$options['plugin']];
+        }
+
+        if (empty($plugins) || !in_array($this->plugin_file, $plugins, true)) {
             return;
         }
 
-        if (!in_array($plugin_file, $options['plugins'])) {
-            return;
-        }
-
-        // Esegui l'aggiornamento personalizzato dopo quello standard
-        add_action('upgrader_process_complete', [$this, 'fix_github_folder_name'], 10, 2);
-    }
-
-    /**
-     * Corregge il nome della cartella dopo l'aggiornamento GitHub
-     */
-    public function fix_github_folder_name($upgrader_object, $options) {
         global $wp_filesystem;
         
         if (!function_exists('WP_Filesystem')) {

@@ -30,7 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.4.4] - 2026-04-23
 
 ### Fixed
+- **Updater GitHub**: Fix critico `upgrader_pre_download` (il download “stream” non viene più sovrascritto a `null`, evitando `ZipArchive::open()` con filename vuoto)
 - **Release bump**: Aggiornata versione e documentazione a `1.3.4.4`
+
+## [1.3.4.5] - 2026-04-23
+
+### Fixed
+- **Release bump**: Aggiornata versione e documentazione a `1.3.4.5`
 
 ## [1.3.3] - 2026-04-23
 
