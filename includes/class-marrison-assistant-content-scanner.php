@@ -232,37 +232,32 @@ class Marrison_Assistant_Content_Scanner {
 
             case 'products':
                 $items = $this->load_content_file('products');
-                if ($items === null) {
+                if (empty($items)) {
                     $legacy = get_option('marrison_assistant_site_content', array());
                     $items  = !empty($legacy['products']) ? $legacy['products'] : array();
+                    if (!empty($items)) {
+                        error_log('Marrison Assistant: products.json vuoto, usato fallback legacy. Prodotti: ' . count($items));
+                    }
                 }
 
                 if (count($keywords) >= 2) {
                     // Passo 1: cerca match perfetti (AND — tutte le keyword devono matchare)
                     $perfect = $this->filter_items_by_keywords(
-                        $items, $keywords, array('title', 'description', 'short_description'), 6, false, true
+                        $items, $keywords, array('title', 'description', 'short_description', 'categories', 'tags', 'sku'), 6, false, true
                     );
                     if (!empty($perfect)) {
                         // Match precisi trovati: usa questi
                         $result['products'] = $perfect;
                     } else {
-                        // Passo 2: nessun match perfetto → torna match parziali (OR)
-                        // L'AI li presenterà come "non ho X ma posso suggerirti questi"
-                        $partial = $this->filter_items_by_keywords(
-                            $items, $keywords, array('title', 'description', 'short_description'), 6, false, false
+                        // Passo 2: cerca match OR (almeno una keyword) e presenta come risultati validi
+                        $result['products'] = $this->filter_items_by_keywords(
+                            $items, $keywords, array('title', 'description', 'short_description', 'categories', 'tags', 'sku'), 6, false, false
                         );
-                        if (!empty($partial)) {
-                            $result['products']               = $partial;
-                            $result['products_partial_match'] = true; // segnala all'AI che sono match parziali
-                        } else {
-                            // Nessun prodotto nemmeno per match parziale
-                            $result['products'] = array();
-                        }
                     }
                 } else {
                     // Query generica (0-1 keyword): OR + fallback ai primi N prodotti
                     $result['products'] = $this->filter_items_by_keywords(
-                        $items, $keywords, array('title', 'description', 'short_description'), 6, true, false
+                        $items, $keywords, array('title', 'description', 'short_description', 'categories', 'tags', 'sku'), 6, true, false
                     );
                 }
                 break;
@@ -396,6 +391,36 @@ class Marrison_Assistant_Content_Scanner {
             'molto','poco','quale','quali','voglio','vorrei','cerco','dove','quando','quanto',
             'qui','già','ancora','sempre','anche','sì','no','the','and','for','with','this',
             'that','have','from','all','hai','stai','puoi','può','può','devo','fare',
+            // Verbi ausiliari / essere / avere / modali (forme comuni)
+            'avete','abbiamo','siete','siamo','sia','siano','ero','eri','era','eravamo',
+            'eravate','erano','fui','fosti','fu','fossimo','foste','furono','sarei',
+            'saresti','sarebbe','saremmo','sareste','sarebbero','abbia','abbiano',
+            'avendo','avuto','avuta','avuti','avute','avessi','avesse','avessimo',
+            'avessero','avresti','avrebbe','avremmo','avreste','avrebbero',
+            'faccia','facciamo','facciano','fai','faccio','facevo','faceva',
+            'devi','deve','dobbiamo','dovete','devono','dovrei','dovresti',
+            'dovrebbe','dovremmo','dovreste','dovrebbero','posso','possiamo',
+            'possono','potrei','potresti','potrebbe','potremmo','potreste',
+            'potrebbero','vogliamo','volete','vogliono','volerei',
+            // Parole generiche che inquinano la ricerca prodotti
+            'disponibile','disponibili','esiste','esistono','esisteva','esistevano',
+            'trovato','trovata','trovati','trovate','presente','presenti','esattamente',
+            'proprio','forse',' circa','circa','solamente','solo','soltanto','appunto',
+            'almeno','piuttosto','certamente','sicuramente','eventualmente',
+            // Avverbi / congiunzioni comuni
+            'perché','perche','quindi','tuttavia','comunque','invece','infatti',
+            'dunque','allora','mentre','dopo','prima','poi','infine','infatti',
+            'bene','male','troppo','tanto','abbastanza','benissimo',
+            // Inglese residuo
+            'is','are','was','were','be','been','being','do','does','did','done',
+            'can','could','would','should','will','shall','may','might','must',
+            'get','got','gets','your','you','we','they','he','she','it','his','her',
+            'our','their','them','him','me','us','my','mine','yours','hers','its',
+            'there','here','when','what','who','how','why','where','which','than',
+            'too','very','just','only','even','also','still','already','yet','now',
+            'then','about','out','up','down','off','over','under','again','once',
+            'both','each','few','more','most','other','some','such','no','nor','not',
+            'own','same','so','than','too','very','can','just','should','now',
         );
 
         $words = array_filter(explode(' ', $query), function ($w) use ($stopwords) {
@@ -434,7 +459,11 @@ class Marrison_Assistant_Content_Scanner {
             // Cerca nei campi testo specificati
             foreach ($fields as $idx => $field) {
                 if (empty($item[$field])) continue;
-                $text   = strtolower(strip_tags($item[$field]));
+                if (is_array($item[$field])) {
+                    $text = strtolower(implode(' ', $item[$field]));
+                } else {
+                    $text = strtolower(strip_tags($item[$field]));
+                }
                 $weight = ($idx === 0) ? 3 : 1;
                 foreach ($keywords as $kw) {
                     if ($this->keyword_matches($text, $kw)) {
@@ -482,7 +511,11 @@ class Marrison_Assistant_Content_Scanner {
     private function keyword_matches($text, $kw) {
         if (strpos($text, $kw) !== false) return true;
         // Stem: rimuove l'ultima lettera per gestire singolare/plurale/genere
-        if (strlen($kw) > 4 && strpos($text, substr($kw, 0, -1)) !== false) return true;
+        // Soglia abbassata a >=4 per coprire colori come nere/neri (4 caratteri)
+        $len = strlen($kw);
+        if ($len >= 4 && strpos($text, substr($kw, 0, -1)) !== false) return true;
+        // Stem più profondo per parole >5 caratteri (es. -oni/-one, -ate/-ata)
+        if ($len > 5 && strpos($text, substr($kw, 0, -2)) !== false) return true;
         return false;
     }
 
@@ -915,6 +948,7 @@ class Marrison_Assistant_Content_Scanner {
                     'regular_price' => $product->get_regular_price(),
                     'sale_price' => $product->get_sale_price(),
                     'categories' => wp_get_post_terms(get_the_ID(), 'product_cat', array('fields' => 'names')),
+                    'tags' => wp_get_post_terms(get_the_ID(), 'product_tag', array('fields' => 'names')),
                     'type' => $product->get_type(),
                     'stock_status' => $product->get_stock_status(),
                     'stock_quantity' => $product->get_stock_quantity(),

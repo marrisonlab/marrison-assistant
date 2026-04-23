@@ -339,7 +339,8 @@ class Marrison_Assistant_Gemini {
             "4. Rispondi in max 3 frasi dirette.\n" .
             "5. Per i prodotti: SEMPRE includi il link al prodotto usando [Nome Prodotto](URL).\n" .
             "6. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL.\n" .
-            "7. Per numeri di telefono: formattali come link cliccabili tel:+39XXXXXXXXXX e WhatsApp come https://wa.me/39XXXXXXXXXX\n\n" .
+            "7. Per numeri di telefono: formattali come link cliccabili tel:+39XXXXXXXXXX e WhatsApp come https://wa.me/39XXXXXXXXXX\n" .
+            "8. I prodotti nella sezione [P] sono già filtrati per la richiesta dell'utente. Se esistono prodotti in [P], presentali DIRETTAMENTE come risultati trovati. NON dire mai 'non ho trovato', 'non disponibile' o frasi simili quando i prodotti sono presenti nel contesto.\n\n" .
             "DOMANDA: " . $message . "\n\nRispondi in italiano:";
 
         error_log('Marrison Assistant: prompt size=' . strlen($full_prompt) . ' bytes, intent=' . $intent);
@@ -408,13 +409,14 @@ class Marrison_Assistant_Gemini {
 
         // Prodotti
         if (!empty($filtered['products'])) {
-            // Match parziali: l'AI deve presentarli come suggerimenti, NON come risposta esatta
-            $prod_header = empty($filtered['products_partial_match'])
-                ? '[P]'
-                : '[P - match parziale: non corrisponde esattamente alla ricerca, presentali come suggerimenti correlati dicendo che il prodotto cercato non è disponibile]';
-            $lines = array($prod_header);
+            $lines = array('[P]');
             foreach ($filtered['products'] as $p) {
                 $line = $p['title'] . '|' . $p['url'];
+                // Categorie: fondamentale per la semantica (es. "Pantalone MAJOR" → categoria "Pantaloni")
+                if (!empty($p['categories'])) {
+                    $cats = implode(',', array_slice($p['categories'], 0, 3));
+                    $line .= '|Cat:' . $cats;
+                }
                 if (!empty($p['price']))        $line .= '|€' . $p['price'];
                 if (!empty($p['stock_status'])) $line .= '|' . ($p['stock_status'] === 'instock' ? '✓' : '✗');
                 if (!empty($p['available_options'])) {
@@ -423,12 +425,11 @@ class Marrison_Assistant_Gemini {
                         if (strlen($val_str) > 40) $val_str = substr($val_str, 0, 40);
                         $line .= '|' . $k . ':' . $val_str;
                     }
-                } else {
-                    if (!empty($p['short_description'])) {
-                        $line .= '|' . substr(strip_tags($p['short_description']), 0, 60);
-                    } elseif (!empty($p['description'])) {
-                        $line .= '|' . substr(strip_tags($p['description']), 0, 60);
-                    }
+                }
+                // Descrizione breve sempre inclusa per aiutare il matching semantico
+                $desc = !empty($p['short_description']) ? strip_tags($p['short_description']) : strip_tags($p['description'] ?? '');
+                if (!empty($desc)) {
+                    $line .= '|' . substr($desc, 0, 60);
                 }
                 $lines[] = $line;
             }
