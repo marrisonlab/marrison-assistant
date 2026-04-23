@@ -19,7 +19,10 @@ class Marrison_Assistant_Updater {
         add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
         add_filter('plugins_api', [$this, 'plugin_info'], 20, 3);
         add_action('upgrader_pre_download', [$this, 'perform_plugin_update'], 10, 2);
+        // WP core currently calls this filter with 1 argument ($options). Accepting up to 3
+        // keeps compatibility with any older internal usage in our code.
         add_filter('upgrader_package_options', [$this, 'debug_package_options'], 10, 3);
+        add_action('upgrader_process_complete', [$this, 'cleanup_maintenance_file'], 10, 2);
     }
 
     /**
@@ -271,17 +274,34 @@ class Marrison_Assistant_Updater {
     /**
      * Debug delle opzioni del package durante l'aggiornamento
      */
-    public function debug_package_options($options, $package, $upgrader) {
+    public function debug_package_options($options, $hook_extra = null, $result = null) {
         error_log('Marrison Assistant: debug_package_options called');
-        error_log('Marrison Assistant: package = ' . var_export($package, true));
         error_log('Marrison Assistant: options = ' . var_export($options, true));
         
-        // Se il package è nullo o vuoto, questo è il nostro problema
-        if (empty($package)) {
-            error_log('Marrison Assistant: CRITICAL - Package is empty/null!');
+        // Controlliamo se c'è package nelle opzioni
+        if (isset($options['package'])) {
+            error_log('Marrison Assistant: package = ' . var_export($options['package'], true));
+            
+            // Se il package è nullo o vuoto, questo è il nostro problema
+            if (empty($options['package'])) {
+                error_log('Marrison Assistant: CRITICAL - Package is empty/null!');
+            }
         }
         
         return $options;
+    }
+
+    /**
+     * Pulisce il file .maintenance anche se l'aggiornamento fallisce
+     */
+    public function cleanup_maintenance_file($upgrader, $options) {
+        error_log('Marrison Assistant: Cleanup maintenance file called');
+        
+        $maintenance_file = ABSPATH . '.maintenance';
+        if (file_exists($maintenance_file)) {
+            error_log('Marrison Assistant: Removing maintenance file');
+            unlink($maintenance_file);
+        }
     }
 }
 
