@@ -3,7 +3,7 @@
  * Plugin Name: Marrison Assistant
  * Plugin URI: https://github.com/marrisonlab/marrison-assistant
  * Description: Asssistente professionale AI per i tuoi clienti
- * Version: 1.3.4.1
+ * Version: 1.3.4.4
  * Author: Marrisonlab
  * Author URI: https://marrisonlab.com
  * Text Domain: marrison-assistant
@@ -21,7 +21,7 @@ if (defined('MARRISON_ASSISTANT_VERSION')) {
 }
 
 // Definisci costanti del plugin
-define('MARRISON_ASSISTANT_VERSION', '1.3.4.1');
+define('MARRISON_ASSISTANT_VERSION', '1.3.4.4');
 define('MARRISON_ASSISTANT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MARRISON_ASSISTANT_PLUGIN_URL', plugin_dir_url(__FILE__));
 

@@ -2,10 +2,19 @@
 
 Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
-**Versione:** 1.3.4.1  
+**Versione:** 1.3.4.4  
 **Autore:** [Marrisonlab](https://marrisonlab.com)
 
 ## 📝 Changelog
+
+### v1.3.4.4 (2026-04-23)
+- **Fix:** Bump versione e documentazione a `1.3.4.4`
+
+### v1.3.4.3 (2026-04-23)
+- **Fix:** Migliorato fallback GitHub release detection e logging quando `releases/latest` non restituisce l’ultima release
+
+### v1.3.4.2 (2026-04-23)
+- **Fix:** Fallback GitHub release detection: se `releases/latest` non è affidabile, usa la lista `releases` e seleziona la versione più alta
 
 ### v1.3.4.1 (2026-04-23)
 - **Fix:** Fallback download pacchetto via `upgrader_pre_download` (stream su file temporaneo) per evitare errori ZipArchive con filename vuoto

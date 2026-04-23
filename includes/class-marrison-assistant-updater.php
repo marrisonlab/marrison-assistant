@@ -98,26 +98,73 @@ class Marrison_Assistant_Updater {
      * Ottiene informazioni sulla versione remota da GitHub
      */
     private function get_remote_version() {
-        // Ottieni ultima release da GitHub
-        $response = wp_remote_get(
-            $this->github_api_url . '/releases/latest',
-            [
-                'timeout' => 15,
-                'headers' => [
-                    'Accept' => 'application/vnd.github.v3+json',
-                    'User-Agent' => 'WordPress/' . get_bloginfo('version')
-                ]
-            ]
-        );
+        $headers = [
+            'Accept' => 'application/vnd.github.v3+json',
+            'User-Agent' => 'WordPress/' . get_bloginfo('version') . '; ' . home_url('/'),
+        ];
 
-        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-            return false;
+        // 1) Prova con /releases/latest (solo release non-prerelease)
+        $response = wp_remote_get($this->github_api_url . '/releases/latest', [
+            'timeout' => 15,
+            'headers' => $headers,
+        ]);
+
+        $code = is_wp_error($response) ? 0 : (int) wp_remote_retrieve_response_code($response);
+        if (is_wp_error($response) || $code !== 200) {
+            error_log('Marrison Assistant: GitHub releases/latest failed (HTTP ' . $code . '): ' . (is_wp_error($response) ? $response->get_error_message() : ''));
+            $body = null;
+        } else {
+            $body = json_decode(wp_remote_retrieve_body($response), true);
         }
 
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        
+        // 2) Fallback: lista release e scegli la versione maggiore (utile se latest non è aggiornato o prerelease)
         if (empty($body['tag_name'])) {
-            return false;
+            $fallback = wp_remote_get($this->github_api_url . '/releases?per_page=10', [
+                'timeout' => 15,
+                'headers' => $headers,
+            ]);
+
+            $fcode = is_wp_error($fallback) ? 0 : (int) wp_remote_retrieve_response_code($fallback);
+            if (is_wp_error($fallback) || $fcode !== 200) {
+                error_log('Marrison Assistant: GitHub releases list failed (HTTP ' . $fcode . '): ' . (is_wp_error($fallback) ? $fallback->get_error_message() : ''));
+                return false;
+            }
+
+            $releases = json_decode(wp_remote_retrieve_body($fallback), true);
+            if (!is_array($releases) || empty($releases)) {
+                return false;
+            }
+
+            $best = null;
+            foreach ($releases as $r) {
+                if (!is_array($r) || empty($r['tag_name'])) continue;
+                if (!empty($r['draft'])) continue; // ignora bozze
+                $tag = $r['tag_name'];
+                $ver = ltrim((string) $tag, 'v');
+                if ($best === null || version_compare($ver, $best['version'], '>')) {
+                    $best = [
+                        'tag_name' => $tag,
+                        'version' => $ver,
+                        'html_url' => $r['html_url'] ?? null,
+                        'published_at' => $r['published_at'] ?? '',
+                        'body' => $r['body'] ?? '',
+                        'assets' => $r['assets'] ?? [],
+                    ];
+                }
+            }
+
+            if ($best === null) {
+                return false;
+            }
+
+            // Normalizza formato atteso più sotto
+            $body = [
+                'tag_name' => $best['tag_name'],
+                'html_url' => $best['html_url'],
+                'published_at' => $best['published_at'],
+                'body' => $best['body'],
+                'assets' => $best['assets'],
+            ];
         }
 
         // Estrai versione (rimuovi 'v' iniziale se presente)
