@@ -16,7 +16,8 @@ class Marrison_Assistant_Updater {
     private $github_repo = 'marrison-assistant';
     private $github_api_url = 'https://api.github.com/repos/marrisonlab/marrison-assistant';
     public function __construct() {
-        add_filter('pre_set_site_transient_update_plugins', [$this, 'check_update']);
+        // Inietta update quando WP legge la cache update_plugins (più affidabile di pre_set_*).
+        add_filter('site_transient_update_plugins', [$this, 'check_update'], 999);
         add_filter('plugins_api', [$this, 'plugin_info'], 20, 3);
         add_action('upgrader_pre_download', [$this, 'perform_plugin_update'], 10, 2);
         // WP core currently calls this filter with 1 argument ($options). Accepting up to 3
@@ -30,8 +31,21 @@ class Marrison_Assistant_Updater {
      */
     public function check_update($transient) {
         error_log('Marrison Assistant: check_update called');
-        
+        if (!is_object($transient)) {
+            $transient = new stdClass();
+        }
+        if (!isset($transient->response) || !is_array($transient->response)) {
+            $transient->response = [];
+        }
+        if (!isset($transient->no_update) || !is_array($transient->no_update)) {
+            $transient->no_update = [];
+        }
+        if (!isset($transient->checked) || !is_array($transient->checked)) {
+            $transient->checked = [];
+        }
+
         if (empty($transient->checked)) {
+            // Niente da confrontare, non iniettiamo update.
             error_log('Marrison Assistant: transient checked is empty');
             return $transient;
         }
@@ -44,33 +58,36 @@ class Marrison_Assistant_Updater {
             return $transient;
         }
 
-        $current_version = MARRISON_ASSISTANT_VERSION;
+        // Versione locale: usa checked se presente, fallback alla costante
+        $current_version = $transient->checked[$this->plugin_file] ?? MARRISON_ASSISTANT_VERSION;
         error_log('Marrison Assistant: current version ' . $current_version . ', remote version ' . $remote_version['version']);
 
         // Confronta versioni
-        if (version_compare($current_version, $remote_version['version'], '<')) {
-            error_log('Marrison Assistant: update available, preparing plugin data');
-            
-            $plugin_data = new stdClass();
-            $plugin_data->slug = $this->plugin_slug;
-            $plugin_data->plugin = $this->plugin_file;
-            $plugin_data->new_version = $remote_version['version'];
-            $plugin_data->url = $remote_version['url'];
-            $plugin_data->package = $remote_version['download_url'];
-            $plugin_data->icons = [];
-            $plugin_data->banners = [];
-            $plugin_data->banners_rtl = [];
-            $plugin_data->tested = '6.4';
-            $plugin_data->requires_php = '7.4';
+        $item = new stdClass();
+        $item->slug = $this->plugin_slug;
+        $item->plugin = $this->plugin_file;
+        $item->new_version = $remote_version['version'];
+        $item->url = $remote_version['url'];
+        $item->package = $remote_version['download_url'];
+        $item->icons = [];
+        $item->banners = [];
+        $item->banners_rtl = [];
+        $item->tested = '6.4';
+        $item->requires_php = '7.4';
+        $item->compatibility = new stdClass();
 
-            error_log('Marrison Assistant: package URL set to: ' . $remote_version['download_url']);
-            
-            $transient->response[$this->plugin_file] = $plugin_data;
-            
-            error_log('Marrison Assistant: plugin data added to transient response');
+        error_log('Marrison Assistant: package URL set to: ' . $remote_version['download_url']);
+
+        if (version_compare($current_version, $remote_version['version'], '<')) {
+            error_log('Marrison Assistant: update available, injecting response');
+            $transient->response[$this->plugin_file] = $item;
         } else {
-            error_log('Marrison Assistant: no update needed');
+            // Popolare no_update aiuta WP a gestire meglio UI e toggle auto-update
+            error_log('Marrison Assistant: no update needed, injecting no_update');
+            $transient->no_update[$this->plugin_file] = $item;
         }
+
+        $transient->checked[$this->plugin_file] = $current_version;
 
         return $transient;
     }
@@ -104,11 +121,11 @@ class Marrison_Assistant_Updater {
         // Estrai versione (rimuovi 'v' iniziale se presente)
         $version = ltrim($body['tag_name'], 'v');
         
-        // Priorità: zipball_url > assets_url > construct URL
+        // Preferisci URL "github.com/.../archive/refs/tags/..." perché l'endpoint API zipball
+        // (`api.github.com/.../zipball/...`) può restituire redirect o rate limit e far fallire
+        // il download in WP_Upgrader (ZipArchive filename vuoto).
         $download_url = '';
-        if (!empty($body['zipball_url'])) {
-            $download_url = $body['zipball_url'];
-        } elseif (!empty($body['assets']) && is_array($body['assets'])) {
+        if (!empty($body['assets']) && is_array($body['assets'])) {
             // Cerca il primo asset che sia un .zip
             foreach ($body['assets'] as $asset) {
                 if (!empty($asset['browser_download_url']) && strpos($asset['browser_download_url'], '.zip') !== false) {
@@ -281,6 +298,16 @@ class Marrison_Assistant_Updater {
         // Controlliamo se c'è package nelle opzioni
         if (isset($options['package'])) {
             error_log('Marrison Assistant: package = ' . var_export($options['package'], true));
+
+            // Se WP sta usando l'endpoint API zipball, riscrivilo verso l'archivio tags su github.com
+            // per evitare download falliti/filename vuoto in ZipArchive.
+            if (is_string($options['package']) && strpos($options['package'], 'https://api.github.com/repos/') === 0 && strpos($options['package'], '/zipball/') !== false) {
+                $tag = basename($options['package']);
+                if (!empty($tag)) {
+                    $options['package'] = 'https://github.com/' . $this->github_user . '/' . $this->github_repo . '/archive/refs/tags/' . $tag . '.zip';
+                    error_log('Marrison Assistant: rewritten package URL to: ' . $options['package']);
+                }
+            }
             
             // Se il package è nullo o vuoto, questo è il nostro problema
             if (empty($options['package'])) {
