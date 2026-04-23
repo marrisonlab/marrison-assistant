@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Updater GitHub (WordPress core)**: Iniezione update via `site_transient_update_plugins` + popolamento `no_update` per stabilità UI/auto-update
 - **Download package**: Preferenza per URL `github.com/.../archive/refs/tags/...zip` per evitare zipball API e errori ZipArchive
 
+## [1.3.4.1] - 2026-04-23
+
+### Fixed
+- **Download package (fallback)**: Download “stream” in file temporaneo via `upgrader_pre_download` per evitare `ZipArchive::open()` con filename vuoto quando WP non riesce a scaricare lo zip
+- **URL download**: Preferenza per `codeload.github.com/.../zip/refs/tags/...` (meno redirect, più affidabile lato WP_Upgrader)
+
 ## [1.3.3] - 2026-04-23
 
 ### Fixed

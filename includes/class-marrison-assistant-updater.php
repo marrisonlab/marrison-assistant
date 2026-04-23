@@ -19,6 +19,8 @@ class Marrison_Assistant_Updater {
         // Inietta update quando WP legge la cache update_plugins (più affidabile di pre_set_*).
         add_filter('site_transient_update_plugins', [$this, 'check_update'], 999);
         add_filter('plugins_api', [$this, 'plugin_info'], 20, 3);
+        // Fallback robusto: se WP fallisce il download (path nullo), scarichiamo noi in un tmp file.
+        add_filter('upgrader_pre_download', [$this, 'pre_download_package'], 10, 3);
         add_action('upgrader_pre_download', [$this, 'perform_plugin_update'], 10, 2);
         // WP core currently calls this filter with 1 argument ($options). Accepting up to 3
         // keeps compatibility with any older internal usage in our code.
@@ -137,7 +139,8 @@ class Marrison_Assistant_Updater {
         
         // Se ancora non abbiamo URL, costruiscilo
         if (empty($download_url)) {
-            $download_url = 'https://github.com/' . $this->github_user . '/' . $this->github_repo . '/archive/refs/tags/' . $body['tag_name'] . '.zip';
+            // codeload è più "diretto" per WP_Upgrader rispetto a github.com/archive (meno redirect strani)
+            $download_url = 'https://codeload.github.com/' . $this->github_user . '/' . $this->github_repo . '/zip/refs/tags/' . $body['tag_name'];
         }
         
         error_log('Marrison Assistant: GitHub release download URL: ' . $download_url);
@@ -304,8 +307,18 @@ class Marrison_Assistant_Updater {
             if (is_string($options['package']) && strpos($options['package'], 'https://api.github.com/repos/') === 0 && strpos($options['package'], '/zipball/') !== false) {
                 $tag = basename($options['package']);
                 if (!empty($tag)) {
-                    $options['package'] = 'https://github.com/' . $this->github_user . '/' . $this->github_repo . '/archive/refs/tags/' . $tag . '.zip';
+                    $options['package'] = 'https://codeload.github.com/' . $this->github_user . '/' . $this->github_repo . '/zip/refs/tags/' . $tag;
                     error_log('Marrison Assistant: rewritten package URL to: ' . $options['package']);
+                }
+            }
+
+            // Se arriva un URL github.com/archive, riscrivilo a codeload (più affidabile lato WP)
+            if (is_string($options['package']) && strpos($options['package'], 'https://github.com/' . $this->github_user . '/' . $this->github_repo . '/archive/refs/tags/') === 0) {
+                $tagZip = basename($options['package']); // es: v1.3.4.zip
+                $tag = preg_replace('/\.zip$/', '', $tagZip);
+                if (!empty($tag)) {
+                    $options['package'] = 'https://codeload.github.com/' . $this->github_user . '/' . $this->github_repo . '/zip/refs/tags/' . $tag;
+                    error_log('Marrison Assistant: rewritten archive URL to codeload: ' . $options['package']);
                 }
             }
             
@@ -316,6 +329,66 @@ class Marrison_Assistant_Updater {
         }
         
         return $options;
+    }
+
+    /**
+     * Download robusto per WP_Upgrader: restituisce path locale del pacchetto.
+     */
+    public function pre_download_package($reply, $package, $upgrader) {
+        if (!is_string($package) || $package === '') {
+            return $reply;
+        }
+
+        // Intercetta solo i pacchetti del nostro repo
+        $is_ours =
+            (strpos($package, 'https://codeload.github.com/' . $this->github_user . '/' . $this->github_repo . '/zip/') === 0) ||
+            (strpos($package, 'https://github.com/' . $this->github_user . '/' . $this->github_repo . '/') === 0) ||
+            (strpos($package, 'https://api.github.com/repos/' . $this->github_user . '/' . $this->github_repo . '/') === 0);
+
+        if (!$is_ours) {
+            return $reply;
+        }
+
+        // Se WP ha già un reply valido, non tocchiamo.
+        if (!empty($reply) && !is_wp_error($reply)) {
+            return $reply;
+        }
+
+        // Scarica in un file temporaneo streammando il contenuto (evita filename vuoti in ZipArchive)
+        $tmp = wp_tempnam($package);
+        if (!$tmp) {
+            return new WP_Error('marrison_tmp_failed', 'Impossibile creare file temporaneo per il download.');
+        }
+
+        error_log('Marrison Assistant: pre_download_package streaming to tmp: ' . $tmp);
+
+        $response = wp_remote_get($package, [
+            'timeout'     => 60,
+            'redirection' => 10,
+            'user-agent'  => 'WordPress/' . get_bloginfo('version') . '; ' . home_url('/'),
+            'stream'      => true,
+            'filename'    => $tmp,
+        ]);
+
+        if (is_wp_error($response)) {
+            @unlink($tmp);
+            error_log('Marrison Assistant: pre_download_package failed: ' . $response->get_error_message());
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code < 200 || $code >= 300) {
+            @unlink($tmp);
+            error_log('Marrison Assistant: pre_download_package HTTP ' . $code);
+            return new WP_Error('marrison_download_http', 'Download pacchetto fallito (HTTP ' . $code . ').');
+        }
+
+        if (!file_exists($tmp) || filesize($tmp) === 0) {
+            @unlink($tmp);
+            return new WP_Error('marrison_download_empty', 'Download pacchetto vuoto.');
+        }
+
+        return $tmp;
     }
 
     /**
