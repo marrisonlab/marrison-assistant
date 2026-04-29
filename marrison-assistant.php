@@ -58,6 +58,9 @@ class Marrison_Assistant {
 
         // White-label: sovrascrive nome e autore nella lista plugin WP (solo se configurato)
         add_filter('all_plugins', array($this, 'apply_white_label_plugin_info'));
+
+        // Link impostazioni nella lista plugin
+        add_filter('plugin_action_links_' . plugin_basename(__FILE__), array($this, 'add_settings_link'));
     }
 
     /**
@@ -95,9 +98,6 @@ class Marrison_Assistant {
         $this->content_scanner = new Marrison_Assistant_Content_Scanner();
         $this->order_scanner = new Marrison_Assistant_Order_Scanner();
         $this->auth = new Marrison_Assistant_Auth();
-        
-        // Aggiungi link impostazioni nella pagina plugin
-        add_filter('plugin_action_links_' . plugin_basename(__FILE__), array($this, 'add_settings_link'));
         
         // Carica le opzioni di default
         $this->set_default_options();
@@ -168,7 +168,7 @@ class Marrison_Assistant {
      * Aggiunge il link alle impostazioni nella pagina dei plugin
      */
     public function add_settings_link($links) {
-        $settings_link = '<a href="' . admin_url('options-general.php?page=marrison-assistant') . '">Settings</a>';
+        $settings_link = '<a href="' . admin_url('admin.php?page=marrison-assistant') . '">Impostazioni</a>';
         array_unshift($links, $settings_link);
         return $links;
     }

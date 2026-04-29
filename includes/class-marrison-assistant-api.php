@@ -161,9 +161,10 @@ class Marrison_Assistant_API {
         error_log('Marrison Assistant: ajax_scan_site_content called');
         
         // Verifica nonce con fallback
-        if (isset($_POST['nonce']) && !wp_verify_nonce($_POST['nonce'], 'marrison_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'marrison_nonce')) {
             error_log('Marrison Assistant: Invalid nonce in scan content');
             wp_send_json_error('Nonce non valido');
+            return;
         }
         
         // Verifica permessi

@@ -260,6 +260,22 @@ class Marrison_Assistant_Content_Scanner {
                         $items, $keywords, array('title', 'description', 'short_description', 'categories', 'tags', 'sku'), 6, true, false
                     );
                 }
+
+                // Fallback per siti di servizi: se nessun prodotto con prezzo trovato,
+                // carica le pagine rilevanti (possono contenere CTA tipo "contattaci per una demo")
+                if (empty($result['products'])) {
+                    $pages = $this->load_content_file('pages') ?? array();
+                    if (!empty($pages)) {
+                        $result['pages'] = $this->filter_items_by_keywords(
+                            $this->exclude_legal_pages($pages),
+                            $keywords,
+                            array('title', 'content', 'excerpt'),
+                            5,
+                            true,
+                            false
+                        );
+                    }
+                }
                 break;
 
             case 'orders':
@@ -280,7 +296,7 @@ class Marrison_Assistant_Content_Scanner {
                 break;
 
             case 'events':
-                $events = $this->load_content_file('events') ?? array();
+                $events = $this->filter_future_events($this->load_content_file('events') ?? array());
                 if (count($keywords) >= 2) {
                     $perfect_ev = $this->filter_items_by_keywords(
                         $events, $keywords, array('title', 'content', 'excerpt'), 10, false, true
@@ -288,11 +304,9 @@ class Marrison_Assistant_Content_Scanner {
                     if (!empty($perfect_ev)) {
                         $result['events'] = $perfect_ev;
                     } else {
-                        $partial_ev = $this->filter_items_by_keywords(
-                            $events, $keywords, array('title', 'content', 'excerpt'), 10, false, false
+                        $result['events'] = $this->filter_items_by_keywords(
+                            $events, $keywords, array('title', 'content', 'excerpt'), 10, true, false
                         );
-                        $result['events']                = $partial_ev;
-                        $result['events_partial_match']  = !empty($partial_ev);
                     }
                 } else {
                     $result['events'] = $this->filter_items_by_keywords(
@@ -353,6 +367,29 @@ class Marrison_Assistant_Content_Scanner {
     }
 
     /**
+     * Filtra gli eventi rimuovendo quelli già conclusi rispetto alla data odierna.
+     * Usato a query-time per proteggere anche da JSON cached con dati stale.
+     */
+    private function filter_future_events($events) {
+        if (empty($events)) return $events;
+        $today_midnight = strtotime('today midnight', current_time('timestamp'));
+        $result = array();
+        foreach ($events as $event) {
+            if (empty($event['start'])) {
+                $result[] = $event; // nessuna data → tieni
+                continue;
+            }
+            // Usa la data di fine se disponibile (eventi multi-giorno); altrimenti la data di inizio
+            $ref = !empty($event['end']) ? $event['end'] : $event['start'];
+            $ts  = strtotime($ref);
+            if ($ts === false || $ts >= $today_midnight) {
+                $result[] = $event;
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Esclude pagine legali/privacy dall'array di pagine per evitare
      * che il loro contenuto inquini le risposte su contatti e servizi.
      */
@@ -404,7 +441,9 @@ class Marrison_Assistant_Content_Scanner {
             'potrebbero','vogliamo','volete','vogliono','volerei',
             // Parole generiche che inquinano la ricerca prodotti
             'disponibile','disponibili','esiste','esistono','esisteva','esistevano',
-            'trovato','trovata','trovati','trovate','presente','presenti','esattamente',
+            'trovato','trovata','trovati','presente','presenti','esattamente',
+            'prossimo','prossima','prossimi','prossime','prossimamente','imminente','imminenti',
+            'futuro','futura','futuri','future','successivo','successiva','successivi','successive',
             'proprio','forse',' circa','circa','solamente','solo','soltanto','appunto',
             'almeno','piuttosto','certamente','sicuramente','eventualmente',
             // Avverbi / congiunzioni comuni
@@ -1255,11 +1294,10 @@ class Marrison_Assistant_Content_Scanner {
                 ),
             );
             $query = new WP_Query($args);
-            error_log('Marrison Assistant [FooEvents]: query trovati ' . $query->found_posts . ' prodotti evento');
 
             if ($query->have_posts()) {
-                $yesterday_ts = strtotime('-1 day');
-                $foo_results  = array();
+                $today_midnight = strtotime('today midnight', current_time('timestamp'));
+                $foo_results    = array();
 
                 while ($query->have_posts()) {
                     $query->the_post();
@@ -1271,13 +1309,12 @@ class Marrison_Assistant_Content_Scanner {
                     $ampm     = get_post_meta($id, 'WooCommerceEventsAmPm', true);
                     $location = get_post_meta($id, 'WooCommerceEventsLocation', true);
 
-                    error_log('Marrison Assistant [FooEvents]: ID=' . $id . ' title="' . get_the_title() . '" date="' . $date . '"');
-
-                    // Filtra eventi passati in PHP — flessibile con qualsiasi formato data
-                    if ( !empty($date) ) {
-                        $event_ts = strtotime($date);
-                        if ( $event_ts !== false && $event_ts < $yesterday_ts ) {
-                            continue; // evento passato, salta
+                    // Filtra eventi passati: usa end_date se disponibile, altrimenti start date
+                    $ref_date = !empty($end_date) ? $end_date : $date;
+                    if ( !empty($ref_date) ) {
+                        $event_ts = strtotime($ref_date);
+                        if ( $event_ts !== false && $event_ts < $today_midnight ) {
+                            continue; // evento già concluso oggi, salta
                         }
                     }
 
@@ -1329,7 +1366,6 @@ class Marrison_Assistant_Content_Scanner {
                 if (!empty($foo_results)) {
                     $found_any = true;
                     $events    = array_merge($events, $foo_results);
-                    error_log('Marrison Assistant [FooEvents]: ' . count($foo_results) . ' eventi futuri aggiunti');
                 }
             }
             wp_reset_postdata();

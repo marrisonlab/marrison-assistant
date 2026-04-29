@@ -16,6 +16,8 @@ class Marrison_Assistant_Site_Agent {
         add_action('wp_ajax_nopriv_marrison_site_agent_chat', array($this, 'handle_chat_request'));
         add_action('wp_ajax_marrison_site_agent_ping', array($this, 'handle_ping'));
         add_action('wp_ajax_nopriv_marrison_site_agent_ping', array($this, 'handle_ping'));
+        add_action('wp_ajax_marrison_site_agent_track', array($this, 'handle_track'));
+        add_action('wp_ajax_nopriv_marrison_site_agent_track', array($this, 'handle_track'));
     }
     
     /**
@@ -74,24 +76,15 @@ class Marrison_Assistant_Site_Agent {
      * Renderizza il widget chat
      */
     public function render_chat_widget() {
-        // Debug log
-        error_log('Marrison Assistant: render_chat_widget called. enable_site_agent: ' . (get_option('marrison_assistant_enable_site_agent', false) ? 'true' : 'false'));
-        error_log('Marrison Assistant: is_user_logged_in: ' . (is_user_logged_in() ? 'true' : 'false'));
-        error_log('Marrison Assistant: logged_only: ' . (get_option('marrison_assistant_site_agent_logged_only', false) ? 'true' : 'false'));
-        
         if (!get_option('marrison_assistant_enable_site_agent', false)) {
-            error_log('Marrison Assistant: Site agent disabled, skipping widget');
             return;
         }
         
         // Verifica se l'utente deve essere loggato
         $logged_only = get_option('marrison_assistant_site_agent_logged_only', false);
         if ($logged_only && !is_user_logged_in()) {
-            error_log('Marrison Assistant: User not logged in and logged_only enabled, skipping widget');
             return;
         }
-        
-        error_log('Marrison Assistant: Rendering widget...');
         
         $position = get_option('marrison_assistant_site_agent_position', 'bottom-right');
         $color = get_option('marrison_assistant_site_agent_color', '#0073aa');
@@ -108,11 +101,6 @@ class Marrison_Assistant_Site_Agent {
         $header_color = get_option('marrison_assistant_site_agent_header_color', '#667eea');
         $button_color = get_option('marrison_assistant_site_agent_button_color', '#667eea');
 
-        // Messaggio personalizzato per utenti non loggati (se il check è disabilitato ma l'utente non è loggato)
-        if (!is_user_logged_in()) {
-            $welcome = 'Ciao! Sono ' . $assistant_name . ', posso aiutarti con informazioni generali.';
-        }
-
         // Assicurati che il messaggio di benvenuto non sia mai vuoto
         if (empty($welcome)) {
             $welcome = 'Ciao! Come posso aiutarti oggi?';
@@ -122,8 +110,8 @@ class Marrison_Assistant_Site_Agent {
         <div id="marrison-chat-widget" class="marrison-chat-widget marrison-<?php echo esc_attr($position); ?>" style="--marrison-icon-color: <?php echo esc_attr($icon_color); ?>; --marrison-header-color: <?php echo esc_attr($header_color); ?>; --marrison-button-color: <?php echo esc_attr($button_color); ?>; --marrison-button-color-hover: <?php echo esc_attr($button_color); ?>;">
             <!-- Chat Button -->
             <div class="marrison-chat-button">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                <svg width="32" height="32" viewBox="0 0 510 510" fill="white" xmlns="http://www.w3.org/2000/svg" clip-rule="evenodd" fill-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2">
+                    <path d="m146.534 64.833c-1.709.358-3.479.547-5.294.547-14.192 0-25.714-11.523-25.714-25.715s11.522-25.714 25.714-25.714c14.193 0 25.715 11.522 25.715 25.714 0 6.592-2.486 12.607-6.57 17.16l49.867 86.372h-18.475zm216.932 0-45.243 78.364h-18.475l49.867-86.372c-4.084-4.553-6.57-10.568-6.57-17.16 0-14.192 11.522-25.714 25.715-25.714 14.192 0 25.714 11.522 25.714 25.714s-11.522 25.715-25.714 25.715c-1.815 0-3.585-.189-5.294-.547zm-44.901 399.044h145.576v-116.387h-14.234v-98.962h29.604c5.462 0 9.896 4.435 9.896 9.897v79.169c0 5.25-4.097 9.551-9.266 9.876v124.407c0 4.418-3.582 8-8 8h-153.576c-3.005 6.361-9.481 10.766-16.978 10.766h-33.982c-10.357 0-18.766-8.409-18.766-18.766s8.409-18.766 18.766-18.766h33.982c7.497 0 13.973 4.405 16.978 10.766zm-258.472-116.387h-29.604c-5.462 0-9.896-4.434-9.896-9.896v-79.169c0-5.462 4.434-9.897 9.896-9.897h29.604zm373.814 42.428c0 21.144-17.251 38.337-38.395 38.337h-173.447l-63.058 65.643c-1.979 2.06-5.012 2.711-7.662 1.645-2.65-1.067-4.386-3.637-4.386-6.494v-60.794h-32.471c-21.144 0-38.395-17.193-38.395-38.337v-192.325c0-21.144 17.251-38.396 38.395-38.396h281.024c21.144 0 38.395 17.252 38.395 38.396zm-124.783-63.836h-112.997c1.214 30.324 26.15 54.282 56.499 54.282 30.348 0 55.284-23.958 56.498-54.282zm-118.407-104.564c-13.421 0-24.317 10.896-24.317 24.317 0 13.422 10.896 24.318 24.317 24.318s24.318-10.896 24.318-24.318c0-13.421-10.897-24.317-24.318-24.317zm128.566 0c-13.421 0-24.318 10.896-24.318 24.317 0 13.422 10.897 24.318 24.318 24.318s24.317-10.896 24.317-24.318c0-13.421-10.896-24.317-24.317-24.317z"/>
                 </svg>
                 <span class="marrison-chat-badge">1</span>
             </div>
@@ -151,11 +139,7 @@ class Marrison_Assistant_Site_Agent {
                 <div class="marrison-chat-messages" style="flex: 1; padding: 20px; overflow-y: auto; background: #f8fafc;">
                     <div class="marrison-message marrison-bot" style="margin-bottom: 16px; display: flex; flex-direction: column; align-items: flex-start;">
                         <div class="marrison-message-content" style="max-width: 85%; padding: 12px 16px; border-radius: 18px; background: #ffffff !important; color: #1e293b !important; border: 1px solid #e2e8f0; border-bottom-left-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); word-wrap: break-word; line-height: 1.4; font-size: 14px; display: block; min-height: 20px;">
-                            <?php 
-                            // Debug: log del messaggio
-                            error_log('Marrison Assistant - Welcome message: ' . var_export($welcome, true));
-                            echo !empty($welcome) ? esc_html($welcome) : 'Ciao! Come posso aiutarti?'; 
-                            ?>
+                            <?php echo !empty($welcome) ? esc_html($welcome) : 'Ciao! Come posso aiutarti?'; ?>
                         </div>
                         <div class="marrison-message-time" style="font-size: 11px; color: #64748b; margin-top: 4px; padding: 0 4px;">Ora</div>
                     </div>
@@ -212,7 +196,6 @@ class Marrison_Assistant_Site_Agent {
             </div>
         </div>
         <?php
-        error_log('Marrison Assistant: Widget rendered successfully');
     }
     
     /**
@@ -221,6 +204,14 @@ class Marrison_Assistant_Site_Agent {
     public function handle_ping() {
         check_ajax_referer('marrison_agent_nonce', 'nonce');
         wp_send_json_success(array('pong' => true, 'time' => current_time('H:i:s')));
+    }
+
+    /**
+     * Tracking eventi client (apertura chat, sessione avviata) — risponde senza fare nulla
+     */
+    public function handle_track() {
+        check_ajax_referer('marrison_agent_nonce', 'nonce');
+        wp_send_json_success(array('ok' => true));
     }
 
     /**

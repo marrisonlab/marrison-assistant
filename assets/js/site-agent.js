@@ -145,8 +145,8 @@ jQuery(document).ready(function($) {
             return 'events';
         }
 
-        // Pattern per informazioni generali
-        if (/\b(chi siete|contatti|dove siete|indirizzo|orari|telefono|email|servizi|chi siamo|about|info)\b/.test(lowerMsg)) {
+        // Pattern per informazioni generali / contatti / sede
+        if (/\b(chi siete|contatti|dove siete|dove vi trovate|dove si trova|dove vi trovo|dove posso venire|come arrivare|come raggiungervi|come raggiungerci|indirizzo|orari|orario|telefono|email|servizi|chi siamo|about|info|sede|ubicazione|raggiungere|siete aperti|apertura|chiusura)\b/.test(lowerMsg)) {
             return 'info';
         }
 

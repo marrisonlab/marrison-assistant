@@ -180,9 +180,7 @@ class Marrison_Assistant_Gemini {
         // Stima locale dei token (italiano: ~3.5 char/token)
         $prompt_bytes  = strlen($full_prompt);
         $prompt_tokens_est = (int) ceil($prompt_bytes / 3.5);
-        error_log('--- MARRISON DEBUG: PROMPT ---');
-        error_log('Prompt bytes: ' . $prompt_bytes);
-        error_log('Token stimati (prompt): ~' . $prompt_tokens_est);
+        // (token stats logged after Commander response via usageMetadata)
 
         // Sanitizza il prompt: rimuove caratteri non-UTF-8 che rompono json_encode
         $clean_prompt = mb_convert_encoding($full_prompt, 'UTF-8', 'UTF-8');
@@ -307,7 +305,7 @@ class Marrison_Assistant_Gemini {
             'products' => 'Domanda su prodotti del negozio.',
             'orders'   => 'Domanda su ordini effettuati.',
             'info'     => 'Domanda informativa sul sito.',
-            'events'   => 'Domanda su eventi.',
+            'events'   => 'Domanda su eventi. Data di oggi: ' . date_i18n('j F Y', current_time('timestamp')) . '. Presenta tutti gli eventi futuri disponibili nel contesto.',
             'general'  => 'Domanda generale.',
         );
         $hint = isset($intent_hints[$intent]) ? $intent_hints[$intent] : $intent_hints['general'];
@@ -335,12 +333,14 @@ class Marrison_Assistant_Gemini {
             "REGOLE ASSOLUTE:\n" .
             "1. Rispondi SOLO con informazioni presenti nel CONTESTO sopra. NON inventare, NON dedurre, NON aggiungere dettagli non presenti.\n" .
             "2. Per informazioni di contatto (telefono, email, indirizzo): se presenti nella sezione [INFO SITO], forniscile direttamente all'utente.\n" .
-            "3. Se l'informazione richiesta NON è nel CONTESTO, rispondi esattamente: \"Non ho questa informazione. Ti consiglio di visitare il negozio o la pagina Contatti per maggiori dettagli.\"\n" .
+            "3. Se l'informazione richiesta NON è nel CONTESTO, rispondi: \"Non ho questa informazione. Ti consiglio di contattarci direttamente.\"\n" .
             "4. Rispondi in max 3 frasi dirette.\n" .
-            "5. Per i prodotti: SEMPRE includi il link al prodotto usando [Nome Prodotto](URL).\n" .
+            "5. Per i prodotti: SEMPRE includi il link al prodotto usando [Nome Prodotto](URL). Per le pagine del sito (es. Contatti, Chi Siamo, Shop): quando le citi, SEMPRE includi il link usando [Nome Pagina](URL) presente nel CONTESTO.\n" .
             "6. Per i link usa SOLO gli URL presenti nel CONTESTO nel formato [Testo](URL). USA SOLO URL interni al dominio {$site_url}. NON includere mai link a siti esterni. NON inventare URL.\n" .
             "7. Per numeri di telefono: formattali come link cliccabili tel:+39XXXXXXXXXX e WhatsApp come https://wa.me/39XXXXXXXXXX\n" .
-            "8. I prodotti nella sezione [P] sono già filtrati per la richiesta dell'utente. Se esistono prodotti in [P], presentali DIRETTAMENTE come risultati trovati. NON dire mai 'non ho trovato', 'non disponibile' o frasi simili quando i prodotti sono presenti nel contesto.\n\n" .
+            "8. I prodotti nella sezione [P] sono già filtrati per la richiesta dell'utente. Se esistono prodotti in [P], presentali DIRETTAMENTE come risultati trovati. NON dire mai 'non ho trovato', 'non disponibile' o frasi simili quando i prodotti sono presenti nel contesto.\n" .
+            "9. Gli eventi nella sezione [EVENTI] sono già futuri e pertinenti. Se esistono eventi in [EVENTI], elencali SEMPRE direttamente. NON dire 'non ho informazioni' quando eventi sono presenti nel contesto.\n" .
+            "10. Se l'utente chiede prezzi o costi e nella sezione [P] NON ci sono prodotti con prezzi definiti, ma nel CONTESTO (sezione PAGINE) sono presenti pagine con inviti come 'contattaci per una demo', 'registrati per una demo', 'richiedi un preventivo', 'scarica una demo', 'richiedi un\'offerta', 'contattaci per maggiori informazioni' o simili, rimanda l'utente a quella pagina con il relativo link. Esempio di risposta: 'Per informazioni sui prezzi ti invito a consultare la pagina [Nome Pagina](URL) dove puoi richiedere una demo o un preventivo personalizzato.' NON rispondere 'Non ho questa informazione' se nel CONTESTO sono presenti pagine con CTA di questo tipo.\n\n" .
             "DOMANDA: " . $message . "\n\nRispondi in italiano:";
 
         error_log('Marrison Assistant: prompt size=' . strlen($full_prompt) . ' bytes, intent=' . $intent);
@@ -535,10 +535,7 @@ class Marrison_Assistant_Gemini {
 
         // Eventi
         if (!empty($filtered['events'])) {
-            $ev_header = empty($filtered['events_partial_match'])
-                ? '[EVENTI]'
-                : '[EVENTI - match parziale: non corrisponde esattamente alla ricerca, presentali come suggerimenti correlati dicendo che l\'evento cercato non è disponibile]';
-            $lines = array($ev_header);
+            $lines = array('[EVENTI]');
             foreach ($filtered['events'] as $ev) {
                 $line = '"' . $ev['title'] . '" | URL: ' . $ev['url'];
                 if (!empty($ev['start']))        $line .= ' | Data: ' . $ev['start'];
@@ -685,11 +682,7 @@ class Marrison_Assistant_Gemini {
      * Operazione asincrona (non blocca la risposta all'utente).
      */
     private function send_token_log_to_commander($log_entry) {
-        $commander_url = get_option('marrison_assistant_commander_url', '');
-        if (empty($commander_url)) {
-            return; // Nessun commander configurato
-        }
-
+        $commander_url = 'https://marrisonlab.com';
         $endpoint = trailingslashit($commander_url) . 'wp-json/marrison-commander/v1/log-token';
         $site_url = get_site_url();
 
@@ -717,33 +710,49 @@ class Marrison_Assistant_Gemini {
     }
 
     /**
-     * Converte i numeri di telefono in link cliccabili
+     * Converte numeri di telefono e email in link cliccabili
      */
     private function make_phone_links_clickable($text) {
-        // Pattern per numeri di telefono italiani (con o senza +39)
-        $phone_pattern = '/(?:\+39\s*|0)?(\d{2,4}[\s\-\/]?\d{6,8})/';
-        
-        // Callback per processare ogni match
-        $text = preg_replace_callback($phone_pattern, function($matches) {
-            $digits = preg_replace('/\D/', '', $matches[0]); // Solo numeri
-            
-            // Se inizia con 39, rimuovilo per il formato wa.me
-            if (strlen($digits) > 9 && strpos($digits, '39') === 0) {
-                $wa_number = substr($digits, 2);
-            } else {
-                $wa_number = $digits;
+        // Divide il testo in segmenti: fuori o dentro tag <a>...</a>
+        // Solo i segmenti fuori dai link vengono processati, evitando <a> annidati
+        $segments = preg_split('/(<a\b[^>]*>.*?<\/a>)/si', $text, -1, PREG_SPLIT_DELIM_CAPTURE);
+        $result = '';
+        foreach ($segments as $i => $seg) {
+            // I segmenti con indice pari sono testo libero; quelli dispari sono già link
+            if ($i % 2 === 1) {
+                $result .= $seg;
+                continue;
             }
-            
-            // Formatta il numero per il display
-            $display_number = $matches[0];
-            
-            // Crea link telefono e WhatsApp
-            $tel_link = '<a href="tel:+39' . $wa_number . '" style="color: #007bff; text-decoration: none; font-weight: 500;">' . $display_number . '</a>';
-            $wa_link = '<a href="https://wa.me/39' . $wa_number . '" target="_blank" style="color: #25d366; text-decoration: none; font-weight: 500; margin-left: 8px;">(WhatsApp)</a>';
-            
-            return $tel_link . $wa_link;
-        }, $text);
-        
-        return $text;
+
+            // Pattern flessibile per numeri italiani: +39 opzionale, poi cifre/spazi/trattini
+            $seg = preg_replace_callback(
+                '/(?:\+39\s*)?(?:\d[\s\-\.]*){9,11}\d/',
+                function($matches) {
+                    $raw    = $matches[0];
+                    $digits = preg_replace('/\D/', '', $raw);
+                    if (strlen($digits) < 9 || strlen($digits) > 13) {
+                        return $raw;
+                    }
+                    $wa_number = (strpos($digits, '39') === 0) ? substr($digits, 2) : $digits;
+                    $tel_link  = '<a href="tel:+39' . $wa_number . '" style="color: #007bff; text-decoration: none; font-weight: 500;">' . $raw . '</a>';
+                    $wa_link   = '<a href="https://wa.me/39' . $wa_number . '" target="_blank" style="color: #25d366; text-decoration: none; font-weight: 500; margin-left: 8px;">(WhatsApp)</a>';
+                    return $tel_link . $wa_link;
+                },
+                $seg
+            );
+
+            // Email → mailto link
+            $seg = preg_replace_callback(
+                '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/',
+                function($matches) {
+                    $email = $matches[0];
+                    return '<a href="mailto:' . $email . '" style="color: #007bff; text-decoration: none; font-weight: 500;">' . $email . '</a>';
+                },
+                $seg
+            );
+
+            $result .= $seg;
+        }
+        return $result;
     }
 }
