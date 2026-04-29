@@ -2,10 +2,23 @@
 
 Plugin WordPress per assistente AI con Google Gemini integrato nel sito.
 
-**Versione:** 1.3.4.5  
+**Versione:** 1.3.5  
 **Autore:** [Marrisonlab](https://marrisonlab.com)
 
 ## 📝 Changelog
+
+### v1.3.5 (2026-04-29)
+- **Fix:** Eventi passati non mostrati — filtro real-time e soglia scansione corretta per FooEvents
+- **Fix:** Intent detection eventi — aggiunte forme plurali ("prossimi") e parole temporali alle stopwords
+- **Fix:** Link "Impostazioni" duplicato nella lista plugin — registrazione filtro spostata nel costruttore e URL corretto
+- **Fix:** Risposte "Non ho questa informazione" per siti di servizi — fallback pagine con CTA demo e regola 10 per reindirizzare
+- **Fix:** Prompt migliorato — data odierna nell'hint eventi e regole esplicite per prodotti/pagine/eventi
+- **Fix:** Rimossi debug error_log dai percorsi di produzione
+- **Fix:** Link email/telefono — evita tag <a> annidati
+- **Fix:** AJAX marrison_site_agent_track registrato correttamente
+- **Fix:** Nonce check logic corretto in ajax_scan_site_content
+- **Fix:** Welcome message hardcoded rimosso, ora rispetta configurazione admin
+- **Fix:** Token logging con Commander URL hardcoded
 
 ### v1.3.4.5 (2026-04-23)
 - **Fix:** Bump versione e documentazione a `1.3.4.5`
